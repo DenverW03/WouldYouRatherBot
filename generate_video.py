@@ -5,6 +5,7 @@ from moviepy.editor import CompositeVideoClip
 class video_builder:
     # Settings class variables
     duration = 10
+    animation_duration = 0.5
     max_dimension = 500
     upper_offset = ((1920 / 2) - max_dimension) / 2
     lower_offset = (1920 - upper_offset) - max_dimension
@@ -31,8 +32,15 @@ class video_builder:
     def add_upper_image(self):
         upper_image = ImageClip("upper.jpg", duration=self.duration)
 
+        # Animation function for use as position argument
+        def upper_image_animation(t):
+            y = self.upper_offset
+            offscreen_y = -self.max_dimension
+            current_y = offscreen_y + (y - offscreen_y) * min(1, t / self.animation_duration)
+            return 'center', current_y
+
         # Setting the position
-        upper_image = upper_image.set_position(('center', self.upper_offset))
+        upper_image = upper_image.set_position(upper_image_animation).set_duration(self.duration)
 
         # Resizing the clip
         upper_image = self.clip_resize(upper_image)
@@ -40,11 +48,19 @@ class video_builder:
         # Returning the composite clip
         return upper_image
 
+    
     def add_lower_image(self):
         lower_image = ImageClip("lower.png", duration=self.duration)
 
+        def lower_image_animation(t):
+            y = self.lower_offset
+            offscreen_y = 1920
+            current_y = offscreen_y + (y - offscreen_y) * min(1, t / self.animation_duration)
+            return 'center', current_y
+
+
         # Setting the position
-        lower_image = lower_image.set_position(('center', self.lower_offset))
+        lower_image = lower_image.set_position(lower_image_animation).set_duration(self.duration)
 
         # Resizing the clip
         lower_image = self.clip_resize(lower_image)
@@ -52,6 +68,7 @@ class video_builder:
         # Returning the composite clip
         return lower_image
 
+    
 
     # This resizes a clip to the max size of the image dimensions settings
     def clip_resize(self, clip):
