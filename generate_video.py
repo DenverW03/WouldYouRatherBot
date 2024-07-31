@@ -3,17 +3,63 @@ from moviepy.video.VideoClip import ImageClip
 from moviepy.editor import CompositeVideoClip
 
 class video_builder:
-    image_path = "background.png"
+    # Settings class variables
     duration = 10
+    max_dimension = 500
+    upper_offset = ((1920 / 2) - max_dimension) / 2
+    lower_offset = (1920 - upper_offset) - max_dimension
+
+    # General class variables
+    image_path = "background.png"
     clip = ImageClip(image_path, duration=duration)
+
+    # Function to build the video
+    def build(self):
+        # Getting composite clips for each piece
+        upper_clip = self.add_upper_image()
+        lower_clip = self.add_lower_image()
+
+        # Piecing the composite clips together
+        final_clip = CompositeVideoClip([self.clip, upper_clip, lower_clip]).set_fps(30)
+
+        # Saving the final clip
+        self.output_video(final_clip)
 
     def output_video(self, clip):
         clip.write_videofile("test.mp4", fps=30)
 
     def add_upper_image(self):
         upper_image = ImageClip("upper.jpg", duration=self.duration)
-        # Compositing the clips together
-        composite_clip = CompositeVideoClip([self.clip, upper_image]).set_fps(30)
-        
-        # Outputting the composite clip
-        self.output_video(composite_clip)
+
+        # Setting the position
+        upper_image = upper_image.set_position(('center', self.upper_offset))
+
+        # Resizing the clip
+        upper_image = self.clip_resize(upper_image)
+
+        # Returning the composite clip
+        return upper_image
+
+    def add_lower_image(self):
+        lower_image = ImageClip("lower.png", duration=self.duration)
+
+        # Setting the position
+        lower_image = lower_image.set_position(('center', self.lower_offset))
+
+        # Resizing the clip
+        lower_image = self.clip_resize(lower_image)
+
+        # Returning the composite clip
+        return lower_image
+
+
+    # This resizes a clip to the max size of the image dimensions settings
+    def clip_resize(self, clip):
+        # Calculating scaling dimension used from clip
+        largest_dimension = clip.w if clip.w > clip.h else clip.h
+
+        # Calculating the downsize multiplier
+        size_mult = self.max_dimension / largest_dimension
+
+        # Applying the resize
+        return clip.resize(size_mult)
