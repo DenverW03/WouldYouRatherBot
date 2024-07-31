@@ -1,6 +1,14 @@
 # For my specific environment
 venv/
 pyrightconfig.json
+__pycache__/
 
 # MacOS
 .DS_Store
+
+# Don't want to commit assets!
+*.mp4
+*.png
+*.jpg
+*.jpeg
+*.mp3

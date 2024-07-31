@@ -1,1 +1,7 @@
-from moviepy import *
+from generate_video import video_builder
+
+
+if __name__ == '__main__':
+    vid_builder = video_builder()
+    
+    vid_builder.add_upper_image()
