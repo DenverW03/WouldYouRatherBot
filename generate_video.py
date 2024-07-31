@@ -1,6 +1,8 @@
 import moviepy.editor
-from moviepy.video.VideoClip import ImageClip
+from moviepy.video.VideoClip import ImageClip, np
 from moviepy.editor import CompositeVideoClip
+import moviepy.video.fx.all
+import numpy as np
 
 class video_builder:
     # Settings class variables
@@ -32,18 +34,40 @@ class video_builder:
     def add_upper_image(self):
         upper_image = ImageClip("upper.jpg", duration=self.duration)
 
-        # Animation function for use as position argument
-        def upper_image_animation(t):
+        # Animation functions used as parameters
+        def upper_image_translation(t):
             y = self.upper_offset
             offscreen_y = -self.max_dimension
             current_y = offscreen_y + (y - offscreen_y) * min(1, t / self.animation_duration)
             return 'center', current_y
 
-        # Setting the position
-        upper_image = upper_image.set_position(upper_image_animation).set_duration(self.duration)
+        def upper_image_rotation(t):
+            return 0 + (360 - 0) * min(1, t / self.animation_duration)
+
+        def resize_frame(gf, t):
+            frame = gf(t)
+            print(type(frame))
+            height, width, third = frame.shape # Third value is because video is RGB
+            print(f"Width: {width}, Height: {height}")
+
+            # Calculating the dimension multipliers and maintaining th aspect ratio
+            if width < height:
+                height_mult = self.max_dimension / height
+                width_mult = height_mult * (9 / 16)
+            else:
+                width_mult = self.max_dimension / width
+                height_mult = width_mult * (16 / 9)
+
+            return frame.resize((int(width * width_mult), int(height * height_mult), third))
+
+        # Adding the animations
+        upper_image = upper_image.set_position(upper_image_translation).set_duration(self.duration)
+        upper_image = upper_image.add_mask().rotate(upper_image_rotation, expand=True)
+        upper_image = upper_image.fl(resize_frame, apply_to='mask')
 
         # Resizing the clip
-        upper_image = self.clip_resize(upper_image)
+        resize_mult = self.calc_resize_mult(upper_image)
+        upper_image = upper_image.resize(resize_mult)
 
         # Returning the composite clip
         return upper_image
@@ -63,15 +87,14 @@ class video_builder:
         lower_image = lower_image.set_position(lower_image_animation).set_duration(self.duration)
 
         # Resizing the clip
-        lower_image = self.clip_resize(lower_image)
+        resize_mult = self.calc_resize_mult(lower_image)
+        lower_image = lower_image.resize(resize_mult)
 
         # Returning the composite clip
         return lower_image
 
-    
-
-    # This resizes a clip to the max size of the image dimensions settings
-    def clip_resize(self, clip):
+    # This function calculates the resize multiplier for a clip
+    def calc_resize_mult(self, clip):
         # Calculating scaling dimension used from clip
         largest_dimension = clip.w if clip.w > clip.h else clip.h
 
@@ -79,4 +102,4 @@ class video_builder:
         size_mult = self.max_dimension / largest_dimension
 
         # Applying the resize
-        return clip.resize(size_mult)
+        return size_mult
