@@ -1,0 +1,6 @@
+# For my specific environment
+venv/
+pyrightconfig.json
+
+# MacOS
+.DS_Store
