@@ -58,7 +58,7 @@ class video_builder:
                 width_mult = self.max_dimension / width
                 height_mult = width_mult * (16 / 9)
 
-            return frame.resize((int(width * width_mult), int(height * height_mult), third))
+            return np.resize(frame, (int(width * width_mult), int(height * height_mult), third))
 
         # Adding the animations
         upper_image = upper_image.set_position(upper_image_translation).set_duration(self.duration)
