@@ -36,14 +36,16 @@ class video_builder:
         upper_image = ImageClip("upper.jpg", duration=self.duration)
 
         # Animation functions used as parameters
-        def upper_image_translation(t):
-            y = self.upper_offset
-            offscreen_y = -self.max_dimension
-            current_y = offscreen_y + (y - offscreen_y) * min(1, t / self.animation_duration)
-            return 'center', current_y
+        def upper_image_translation(t, clip):
+            x = (1080 - clip.w) / 2
+            offscreen_x = -self.max_dimension
+            current_x = offscreen_x + (x - offscreen_x) * min(1, t / self.animation_duration)
+            return current_x, self.upper_offset
 
         def upper_image_rotation(t):
-            return 0 + (360 - 0) * min(1, t / self.animation_duration)
+            start_angle = 90
+            end_angle = 0
+            return start_angle + (end_angle - start_angle) * min(1, t / self.animation_duration)
 
         # TODO: Resize dynamically to fit the desired diagonal length, to keep the size consistent through rotation
         def resize_frame(gf, t):
@@ -64,8 +66,8 @@ class video_builder:
             return np.array(resized_image)
 
         # Adding the animations
-        upper_image = upper_image.set_position(upper_image_translation).set_duration(self.duration)
-        upper_image = upper_image.add_mask().rotate(upper_image_rotation, expand=True)
+        upper_image = upper_image.set_position(lambda t: upper_image_translation(t, upper_image)).set_duration(self.duration)
+        upper_image = upper_image.add_mask().rotate(upper_image_rotation, expand=False)
         upper_image = upper_image.fl(resize_frame, apply_to='mask')
 
         # Returning the composite clip
