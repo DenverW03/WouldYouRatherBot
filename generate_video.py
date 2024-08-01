@@ -1,5 +1,5 @@
 import moviepy.editor
-from moviepy.video.VideoClip import ImageClip, np
+from moviepy.video.VideoClip import ImageClip, TextClip
 from moviepy.editor import CompositeVideoClip
 import moviepy.video.fx.all
 import numpy as np
@@ -12,6 +12,8 @@ class video_builder:
     max_dimension = 500
     upper_offset = ((1920 / 2) - max_dimension) / 2
     lower_offset = (1920 - upper_offset) - max_dimension
+    upper_offset_text = (1920 / 2) - 200
+    lower_offset_text = (1920 / 2) + 100
 
     # General class variables
     image_path = "background.png"
@@ -30,11 +32,24 @@ class video_builder:
         upper_clip = self.add_image(self.upper_offset, False, "upper.jpg")
         lower_clip = self.add_image(self.lower_offset, True, "lower.png")
 
+        # Creating the text clips
+        upper_clip_text = self.add_text(self.upper_offset_text, "Be a Chef")
+        lower_clip_text = self.add_text(self.lower_offset_text, "Be a Doctor")
+
         # Piecing the composite clips together
-        final_clip = CompositeVideoClip([self.clip, upper_clip, lower_clip]).set_fps(30)
+        final_clip = CompositeVideoClip([self.clip, upper_clip, lower_clip, upper_clip_text, lower_clip_text]).set_fps(30)
 
         # Saving the final clip
         final_clip.write_videofile("test.mp4", fps=30)
+
+    # Creates a text clip and returns it
+    # y_offset (int) = the position on screen, to place with upper or lower choice
+    # text (str) = the text to add
+    def add_text(self, y_offset, text):
+        # Creating the text clip
+        text_clip = TextClip(text, fontsize=60, color='white')
+        text_clip = text_clip.set_position(('center', y_offset)).set_duration(self.duration)
+        return text_clip
 
     # Adds an image and animates int
     # y_offset (int) = the y offset on the screen, to dictate whether upper or lower
