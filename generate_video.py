@@ -17,6 +17,13 @@ class video_builder:
     image_path = "background.png"
     clip = ImageClip(image_path, duration=duration)
 
+    # Constructor, sets the text strings
+    # upper_text (str) = the text for the upper choice
+    # lower_text (str) = the text for the lower choice
+    def __init__(self, upper_text, lower_text):
+        self.upper_text = upper_text
+        self.lower_text = lower_text
+
     # Function to build the video
     def build(self):
         # Getting composite clips for each piece
@@ -27,10 +34,7 @@ class video_builder:
         final_clip = CompositeVideoClip([self.clip, upper_clip, lower_clip]).set_fps(30)
 
         # Saving the final clip
-        self.output_video(final_clip)
-
-    def output_video(self, clip):
-        clip.write_videofile("test.mp4", fps=30)
+        final_clip.write_videofile("test.mp4", fps=30)
 
     # Adds an image and animates int
     # y_offset (int) = the y offset on the screen, to dictate whether upper or lower
