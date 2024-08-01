@@ -36,9 +36,9 @@ class video_builder:
         upper_image = ImageClip("upper.jpg", duration=self.duration)
 
         # Animation functions used as parameters
-        def upper_image_translation(t, clip):
+        def translate_clip(t, clip):
             x = (1080 / 2) - (clip.h / 2) # clip.h represents with here for some reason, cba figuring it out
-            offscreen_x = -clip.h
+            offscreen_x = -self.max_dimension
             current_x = offscreen_x + (x - offscreen_x) * min(1, t / self.animation_duration)
             return current_x, self.upper_offset
 
@@ -81,7 +81,7 @@ class video_builder:
         # Adding the animations
         upper_image = upper_image.add_mask()
         upper_image = upper_image.fl(rotate_frame, apply_to='mask')
-        upper_image = upper_image.set_position(lambda t: upper_image_translation(t, upper_image)).set_duration(self.duration)
+        upper_image = upper_image.set_position(lambda t: translate_clip(t, upper_image)).set_duration(self.duration)
 
         # Returning the composite clip
         return upper_image
@@ -89,37 +89,53 @@ class video_builder:
     def add_lower_image(self):
         lower_image = ImageClip("lower.png", duration=self.duration)
 
-        def lower_image_animation(t):
-            y = self.lower_offset
-            offscreen_y = 1920
-            current_y = offscreen_y + (y - offscreen_y) * min(1, t / self.animation_duration)
-            return 'center', current_y
+        # Animation functions used as parameters
+        def translate_clip(t, clip):
+            x = (1080 / 2) - (clip.h / 2) # clip.h represents with here for some reason, cba figuring it out
+            offscreen_x = 1920
+            current_x = offscreen_x - (offscreen_x - x) * min(1, t / self.animation_duration)
+            return current_x, self.lower_offset
 
-        def lower_image_rotation(t):
-            return 0 + (360 - 0) * min(1, t / self.animation_duration)
-
-        def resize_frame(gf, t):
+        # Frame rotation function with rotation angle based resizing
+        def rotate_frame(gf, t):
+            # Getting the frame at the time step
             frame = gf(t)
 
+            # Safely getting the height and width dimensions
             if frame.ndim == 2:
                 height, width = frame.shape
             else:
-                height, width, depth = frame.shape
+                height, width, _ = frame.shape
 
+            # Calculating the scaling multiplier
             largest_dimension = width if width > height else height
             scale_mult = self.max_dimension / largest_dimension
 
+            # Resizing to the intended standard dimensions (max size on largest dimension)
+            width = int(width * scale_mult)
+            height = int(height * scale_mult)
+
+            # Calculating the current angle of rotation at time step
+            start_angle = 90
+            end_angle = 0
+            current_angle = start_angle + (end_angle - start_angle) * min(1, t / self.animation_duration)
+            current_angle_rad = current_angle * (np.pi / 180)
+
+            # Calculating the new bounding box of the rotated image
+            new_width = int(abs(width * np.cos(current_angle_rad)) + abs(height * np.sin(current_angle_rad)))
+            new_height = int(abs(width * np.sin(current_angle_rad)) + abs(height * np.cos(current_angle_rad)))
+
+            # Applying the rotation and resize
             image = Image.fromarray(frame)
-            new_size = (int(width * scale_mult), int(height * scale_mult))
-            resized_image = image.resize(new_size)
+            rotated_image = image.rotate(current_angle, expand=True)
+            resized_image = rotated_image.resize((new_width, new_height))
 
             return np.array(resized_image)
 
-
-        # Setting the position
-        lower_image = lower_image.set_position(lower_image_animation).set_duration(self.duration)
-        lower_image = lower_image.add_mask().rotate(lower_image_rotation, expand=True)
-        lower_image = lower_image.fl(resize_frame, apply_to='mask')
+        # Adding the animations
+        lower_image = lower_image.add_mask()
+        lower_image = lower_image.fl(rotate_frame, apply_to='mask')
+        lower_image = lower_image.set_position(lambda t: translate_clip(t, lower_image)).set_duration(self.duration)
 
         # Returning the composite clip
         return lower_image
