@@ -61,8 +61,6 @@ class video_builder:
             width = int(width * scale_mult)
             height = int(height * scale_mult)
 
-            print("width: {}, height: {}".format(width, height))
-
             # Calculating the current angle of rotation at time step
             start_angle = 90
             end_angle = 0
@@ -72,8 +70,6 @@ class video_builder:
             # Calculating the new bounding box of the rotated image
             new_width = int(abs(width * np.cos(current_angle_rad)) + abs(height * np.sin(current_angle_rad)))
             new_height = int(abs(width * np.sin(current_angle_rad)) + abs(height * np.cos(current_angle_rad)))
-
-            print("new width: {}, new height: {}".format(new_width, new_height))
 
             # Applying the rotation and resize
             image = Image.fromarray(frame)
