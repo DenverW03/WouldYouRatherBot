@@ -13,7 +13,7 @@ class video_builder:
     upper_offset = ((1920 / 2) - max_dimension) / 2
     lower_offset = (1920 - upper_offset) - max_dimension
     upper_offset_text = (1920 / 2) - 200
-    lower_offset_text = (1920 / 2) + 100
+    lower_offset_text = (1920 / 2) + 40
 
     # General class variables
     image_path = "background.png"
@@ -47,7 +47,7 @@ class video_builder:
     # text (str) = the text to add
     def add_text(self, y_offset, text):
         # Creating the text clip
-        text_clip = TextClip(text, fontsize=60, color='white')
+        text_clip = TextClip(text, fontsize=100, color='white', font='Arial Black', stroke_color='black', stroke_width=4)
         text_clip = text_clip.set_position(('center', y_offset)).set_duration(self.duration)
         return text_clip
 
