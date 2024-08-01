@@ -37,9 +37,8 @@ class video_builder:
 
         # Animation functions used as parameters
         def upper_image_translation(t, clip):
-            x = (1080 / 2) - (clip.w / 2)
-            print(clip.w)
-            offscreen_x = -self.max_dimension
+            x = (1080 / 2) - (clip.h / 2) # clip.h represents with here for some reason, cba figuring it out
+            offscreen_x = -clip.h
             current_x = offscreen_x + (x - offscreen_x) * min(1, t / self.animation_duration)
             return current_x, self.upper_offset
 
@@ -62,6 +61,8 @@ class video_builder:
             width = int(width * scale_mult)
             height = int(height * scale_mult)
 
+            print("width: {}, height: {}".format(width, height))
+
             # Calculating the current angle of rotation at time step
             start_angle = 90
             end_angle = 0
@@ -72,22 +73,19 @@ class video_builder:
             new_width = int(abs(width * np.cos(current_angle_rad)) + abs(height * np.sin(current_angle_rad)))
             new_height = int(abs(width * np.sin(current_angle_rad)) + abs(height * np.cos(current_angle_rad)))
 
-            # Applying the resize
+            print("new width: {}, new height: {}".format(new_width, new_height))
+
+            # Applying the rotation and resize
             image = Image.fromarray(frame)
             rotated_image = image.rotate(current_angle, expand=True)
             resized_image = rotated_image.resize((new_width, new_height))
 
-            # Applying the rotation
-
             return np.array(resized_image)
 
         # Adding the animations
-        upper_image = upper_image.set_position(lambda t: upper_image_translation(t, upper_image)).set_duration(self.duration)
-        #upper_image = upper_image.add_mask().rotate(upper_image_rotation, expand=False)
-        #upper_image = upper_image.fl(resize_frame, apply_to='mask')
         upper_image = upper_image.add_mask()
         upper_image = upper_image.fl(rotate_frame, apply_to='mask')
-        #upper_image = upper_image.set_position(lambda t: upper_image_translation(t, upper_image)).set_duration(self.duration)
+        upper_image = upper_image.set_position(lambda t: upper_image_translation(t, upper_image)).set_duration(self.duration)
 
         # Returning the composite clip
         return upper_image
