@@ -1,7 +1,5 @@
-import moviepy.editor
 from moviepy.video.VideoClip import ImageClip, TextClip
 from moviepy.editor import CompositeVideoClip
-import moviepy.video.fx.all
 import numpy as np
 from PIL import Image
 
