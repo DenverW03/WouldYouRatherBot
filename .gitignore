@@ -2,6 +2,7 @@
 venv/
 pyrightconfig.json
 __pycache__/
+todo.md
 
 # MacOS
 .DS_Store
