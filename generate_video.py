@@ -54,11 +54,25 @@ class video_builder:
     # side (bool) = the side the entrance animation starts from, true = left, false = right
     # image (str) = a str containing the path to the image
     def add_image(self, y_offset, side, image):
-        upper_image = ImageClip(image, duration=self.duration)
+        image = ImageClip(image, duration=self.duration)
 
         # Animation functions used as parameters
         def translate_clip(t, clip):
             x = (1080 / 2) - (clip.h / 2) # clip.h represents with here for some reason, cba figuring it out
+
+            # Exit translation animation
+            if t >= self.duration - 1:
+                if not side: # right
+                    # Because this entered on the right it should leave on the left
+                    offscreen_x = -self.max_dimension
+                    current_x = x + (offscreen_x - x) * min(1, (t - (self.duration - 1)) / 0.3)
+                else: # left
+                    # Entered on the left so leave on the right
+                    offscreen_x = 1080
+                    current_x = x - (x - offscreen_x) * min(1, (t - (self.duration - 1)) / 0.3)
+
+                return current_x, y_offset
+
 
             if not side: # right
                 offscreen_x = -self.max_dimension
@@ -106,12 +120,12 @@ class video_builder:
             return np.array(resized_image)
 
         # Adding the animations
-        upper_image = upper_image.add_mask()
-        upper_image = upper_image.fl(rotate_frame, apply_to='mask')
-        upper_image = upper_image.set_position(lambda t: translate_clip(t, upper_image)).set_duration(self.duration)
+        image = image.add_mask()
+        image = image.fl(rotate_frame, apply_to='mask')
+        image = image.set_position(lambda t: translate_clip(t, image)).set_duration(self.duration)
 
         # Returning the composite clip
-        return upper_image
+        return image
 
     # This function calculates the resize multiplier for a clip
     def calc_resize_mult(self, clip):
