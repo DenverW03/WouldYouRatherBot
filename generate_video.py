@@ -65,11 +65,11 @@ class video_builder:
                 if not side: # right
                     # Because this entered on the right it should leave on the left
                     offscreen_x = -self.max_dimension
-                    current_x = x + (offscreen_x - x) * min(1, (t - (self.duration - 1)) / 0.3)
+                    current_x = x + (offscreen_x - x) * min(1, (t - (self.duration - 1)) / self.animation_duration)
                 else: # left
                     # Entered on the left so leave on the right
                     offscreen_x = 1080
-                    current_x = x - (x - offscreen_x) * min(1, (t - (self.duration - 1)) / 0.3)
+                    current_x = x - (x - offscreen_x) * min(1, (t - (self.duration - 1)) / self.animation_duration)
 
                 return current_x, y_offset
 
