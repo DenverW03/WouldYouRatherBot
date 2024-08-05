@@ -7,7 +7,7 @@ class video_builder:
     # Settings class variables
     duration = 10
     animation_duration = 0.3
-    exit_offset = 0.3 # How long before the end of the video (duration) should the exit animations play
+    image_exit_offset = 0.6 # How long before the end of the video (duration) should the image exit animations play
     max_dimension = 500
     upper_offset = ((1920 / 2) - max_dimension) / 2
     lower_offset = (1920 - upper_offset) - max_dimension
@@ -62,15 +62,15 @@ class video_builder:
             x = (1080 / 2) - (clip.h / 2) # clip.h represents with here for some reason, cba figuring it out
 
             # Exit translation animation
-            if t >= self.duration - self.exit_offset:
+            if t >= self.duration - self.image_exit_offset:
                 if not side: # right
                     # Because this entered on the right it should leave on the left
                     offscreen_x = -self.max_dimension
-                    current_x = x + (offscreen_x - x) * min(1, (t - (self.duration - self.exit_offset)) / self.animation_duration)
+                    current_x = x + (offscreen_x - x) * min(1, (t - (self.duration - self.image_exit_offset)) / self.animation_duration)
                 else: # left
                     # Entered on the left so leave on the right
                     offscreen_x = 1080
-                    current_x = x - (x - offscreen_x) * min(1, (t - (self.duration - self.exit_offset)) / self.animation_duration)
+                    current_x = x - (x - offscreen_x) * min(1, (t - (self.duration - self.image_exit_offset)) / self.animation_duration)
 
                 return current_x, y_offset
 
