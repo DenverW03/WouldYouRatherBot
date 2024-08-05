@@ -8,6 +8,8 @@ class video_builder:
     duration = 10
     animation_duration = 0.3
     image_exit_offset = 0.6 # How long before the end of the video (duration) should the image exit animations play
+    spin_animation_offset = 0.3
+    text_start = 1 # How long before the text starts to fade in
     max_dimension = 500
     upper_offset = ((1920 / 2) - max_dimension) / 2
     lower_offset = (1920 - upper_offset) - max_dimension
@@ -36,7 +38,7 @@ class video_builder:
         lower_clip_text = self.add_text(self.lower_offset_text, "Be a Doctor")
 
         # Piecing the composite clips together
-        final_clip = CompositeVideoClip([self.clip, upper_clip, lower_clip, upper_clip_text, lower_clip_text]).set_fps(30)
+        final_clip = CompositeVideoClip([self.clip, upper_clip, lower_clip, upper_clip_text.crossfadein(self.animation_duration).crossfadeout(self.animation_duration).set_start(self.text_start), lower_clip_text.crossfadein(self.animation_duration).crossfadeout(self.animation_duration).set_start(self.text_start)]).set_fps(30)
 
         # Saving the final clip
         final_clip.write_videofile("test.mp4", fps=30)
@@ -47,7 +49,7 @@ class video_builder:
     def add_text(self, y_offset, text):
         # Creating the text clip
         text_clip = TextClip(text, fontsize=100, color='white', font='Arial Black', stroke_color='black', stroke_width=4)
-        text_clip = text_clip.set_position(('center', y_offset)).set_duration(self.duration)
+        text_clip = text_clip.set_position(('center', y_offset)).set_duration(self.duration - self.text_start)
         return text_clip
 
     # Adds an image and animates int
