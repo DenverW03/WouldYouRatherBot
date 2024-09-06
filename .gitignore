@@ -1,5 +1,5 @@
 # For my specific environment
-venv/
+.venv/
 pyrightconfig.json
 __pycache__/
 todo.md
