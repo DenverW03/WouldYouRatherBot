@@ -17,31 +17,33 @@ class video_builder:
     lower_offset_text = (1920 / 2) + 40
 
     # General class variables
-    image_path = "background.png"
+    image_path = "resources/background.png"
     clip = ImageClip(image_path, duration=duration)
 
     # Constructor, sets the text strings
     # upper_text (str) = the text for the upper choice
     # lower_text (str) = the text for the lower choice
-    def __init__(self, upper_text, lower_text):
+    def __init__(self, upper_text, lower_text, upper_image, lower_image):
         self.upper_text = upper_text
         self.lower_text = lower_text
+        self.upper_image = upper_image
+        self.lower_image = lower_image
 
     # Function to build the video
     def build(self):
         # Getting composite clips for each piece
-        upper_clip = self.add_image(self.upper_offset, False, "upper.jpg")
-        lower_clip = self.add_image(self.lower_offset, True, "lower.png")
+        upper_clip = self.add_image(self.upper_offset, False, self.upper_image)
+        lower_clip = self.add_image(self.lower_offset, True, self.lower_image)
 
         # Creating the text clips
-        upper_clip_text = self.add_text(self.upper_offset_text, "Be a Chef")
-        lower_clip_text = self.add_text(self.lower_offset_text, "Be a Doctor")
+        upper_clip_text = self.add_text(self.upper_offset_text, self.upper_text)
+        lower_clip_text = self.add_text(self.lower_offset_text, self.lower_text)
 
         # Piecing the composite clips together
         final_clip = CompositeVideoClip([self.clip, upper_clip, lower_clip, upper_clip_text.crossfadein(self.animation_duration).crossfadeout(self.animation_duration).set_start(self.text_start), lower_clip_text.crossfadein(self.animation_duration).crossfadeout(self.animation_duration).set_start(self.text_start)]).set_fps(30)
 
         # Saving the final clip
-        final_clip.write_videofile("test.mp4", fps=30)
+        final_clip.write_videofile("out/test.mp4", fps=30)
 
     # Creates a text clip and returns it
     # y_offset (int) = the position on screen, to place with upper or lower choice
