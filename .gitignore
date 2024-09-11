@@ -1,17 +1,5 @@
-# Python video tool
-video_tool/.venv/
-video_tool/pyrightconfig.json
-video_tool/__pycache__/
-
 # org
 todo.md
 
 # MacOS
-.DS_Store
-
-# Don't want to commit assets!
-*.mp4
-*.png
-*.jpg
-*.jpeg
-*.mp3
+*.DS_Store

@@ -1,0 +1,11 @@
+# Python video tool
+.venv/
+pyrightconfig.json
+__pycache__/
+
+# Don't want to commit assets!
+*.mp4
+*.png
+*.jpg
+*.jpeg
+*.mp3
