@@ -2,7 +2,6 @@
 .venv/
 pyrightconfig.json
 __pycache__/
-resources/
 
 # Don't want to commit assets!
 *.mp4
@@ -10,3 +9,5 @@ resources/
 *.jpg
 *.jpeg
 *.mp3
+resources/
+out/

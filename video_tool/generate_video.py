@@ -41,7 +41,7 @@ class video_builder:
         lower_clip_text = self.add_text(self.lower_offset_text, self.lower_text)
 
         # Piecing the composite clips together
-        final_clip = CompositeVideoClip([self.clip, upper_clip, lower_clip, upper_clip_text.crossfadein(self.animation_duration).crossfadeout(self.animation_duration).set_start(self.text_start), lower_clip_text.crossfadein(self.animation_duration).crossfadeout(self.animation_duration).set_start(self.text_start)]).set_fps(30)
+        final_clip = CompositeVideoClip([self.clip, upper_clip, lower_clip, upper_clip_text.with_start(self.text_start), lower_clip_text.with_start(self.text_start)]).with_fps(30)
 
         # Saving the final clip
         final_clip.write_videofile("out/test.mp4", fps=30)
@@ -51,86 +51,71 @@ class video_builder:
     # text (str) = the text to add
     def add_text(self, y_offset, text):
         # Creating the text clip
-        text_clip = TextClip(text, fontsize=100, color='white', font='Arial Black', stroke_color='black', stroke_width=4)
-        text_clip = text_clip.set_position(('center', y_offset)).set_duration(self.duration - self.text_start)
+        text_clip = TextClip(text=text, font_size=100, color='white', font='Arial Black', stroke_color='black', stroke_width=4)
+        text_clip = text_clip.with_position(('center', y_offset)).with_duration(self.duration - self.text_start)
         return text_clip
 
-    # Adds an image and animates int
+    # Adds an image and animates it
     # y_offset (int) = the y offset on the screen, to dictate whether upper or lower
     # side (bool) = the side the entrance animation starts from, true = left, false = right
-    # image (str) = a str containing the path to the image
-    def add_image(self, y_offset, side, image):
-        image = ImageClip(image, duration=self.duration)
-
-        # Animation functions used as parameters
-        def translate_clip(t, clip):
-            x = (1080 / 2) - (clip.h / 2) # clip.h represents with here for some reason, cba figuring it out
-
-            # Exit translation animation
-            if t >= self.duration - self.image_exit_offset:
-                if not side: # right
-                    # Because this entered on the right it should leave on the left
-                    offscreen_x = -self.max_dimension
-                    current_x = x + (offscreen_x - x) * min(1, (t - (self.duration - self.image_exit_offset)) / self.animation_duration)
-                else: # left
-                    # Entered on the left so leave on the right
-                    offscreen_x = 1080
-                    current_x = x - (x - offscreen_x) * min(1, (t - (self.duration - self.image_exit_offset)) / self.animation_duration)
-
-                return current_x, y_offset
-
-
-            if not side: # right
-                offscreen_x = -self.max_dimension
-                current_x = offscreen_x + (x - offscreen_x) * min(1, t / self.animation_duration)
-            else: # left
-                offscreen_x = 1080
-                current_x = offscreen_x - (offscreen_x - x) * min(1, t / self.animation_duration)
-
-            return current_x, y_offset
-
-        # Frame rotation function with rotation angle based resizing
-        def rotate_frame(gf, t):
-            # Getting the frame at the time step
-            frame = gf(t)
-
-            # Safely getting the height and width dimensions
-            if frame.ndim == 2:
-                height, width = frame.shape
-            else:
-                height, width, _ = frame.shape
-
-            # Calculating the scaling multiplier
-            largest_dimension = width if width > height else height
-            scale_mult = self.max_dimension / largest_dimension
-
-            # Resizing to the intended standard dimensions (max size on largest dimension)
-            width = int(width * scale_mult)
-            height = int(height * scale_mult)
-
-            # Calculating the current angle of rotation at time step
+    # image_path (str) = a str containing the path to the image
+    def add_image(self, y_offset, side, image_path):
+        # Load the image
+        image = ImageClip(image_path, duration=self.duration)
+        
+        # Resize the image to fit max_dimension
+        image = image.resized(self.calc_resize_mult(image))
+        
+        # Create the rotation and translation transformation
+        def rotate_and_translate(get_frame, t):
+            frame = get_frame(t)
+            
+            # Calculate rotation angle
             start_angle = 90
             end_angle = 0
             current_angle = start_angle + (end_angle - start_angle) * min(1, t / self.animation_duration)
-            current_angle_rad = current_angle * (np.pi / 180)
+            
+            # Apply rotation
+            image_pil = Image.fromarray(frame)
 
-            # Calculating the new bounding box of the rotated image
-            new_width = int(abs(width * np.cos(current_angle_rad)) + abs(height * np.sin(current_angle_rad)))
-            new_height = int(abs(width * np.sin(current_angle_rad)) + abs(height * np.cos(current_angle_rad)))
+            # Converting to RGBA and masking with a second image without alpha layer removes PIL rotate&expand background
+            im2 = image_pil.convert('RGBA')
+            rotated_image = im2.rotate(current_angle, expand=True)
+            fff = Image.new('RGBA', rotated_image.size, (255, 255, 255, 0)) # No alpha layer image to combine regular image with
+            out = Image.composite(rotated_image, fff, rotated_image)
 
-            # Applying the rotation and resize
-            image = Image.fromarray(frame)
-            rotated_image = image.rotate(current_angle, expand=True)
-            resized_image = rotated_image.resize((new_width, new_height))
-
-            return np.array(resized_image)
-
-        # Adding the animations
-        image = image.add_mask()
-        image = image.fl(rotate_frame, apply_to='mask')
-        image = image.set_position(lambda t: translate_clip(t, image)).set_duration(self.duration)
-
-        # Returning the composite clip
+            return np.array(out)
+        
+        # Apply the rotation transformation
+        image = image.transform(rotate_and_translate)
+        
+        # Create position animation function
+        def get_position(t):
+            x = (1080 / 2) - (image.w / 2)
+            
+            # Exit translation animation
+            if t >= self.duration - self.image_exit_offset:
+                if not side:  # right
+                    offscreen_x = -self.max_dimension
+                    current_x = x + (offscreen_x - x) * min(1, (t - (self.duration - self.image_exit_offset)) / self.animation_duration)
+                else:  # left
+                    offscreen_x = 1080
+                    current_x = x - (x - offscreen_x) * min(1, (t - (self.duration - self.image_exit_offset)) / self.animation_duration)
+                return current_x, y_offset
+            
+            # Entrance animation
+            if not side:  # right
+                offscreen_x = -self.max_dimension
+                current_x = offscreen_x + (x - offscreen_x) * min(1, t / self.animation_duration)
+            else:  # left
+                offscreen_x = 1080
+                current_x = offscreen_x - (offscreen_x - x) * min(1, t / self.animation_duration)
+            
+            return current_x, y_offset
+        
+        # Apply position animation
+        image = image.with_position(get_position).with_duration(self.duration)
+        
         return image
 
     # This function calculates the resize multiplier for a clip
