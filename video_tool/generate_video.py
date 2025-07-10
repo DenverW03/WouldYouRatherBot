@@ -1,5 +1,6 @@
-from moviepy.video.VideoClip import ImageClip, TextClip
-from moviepy.editor import CompositeVideoClip
+#from moviepy.video.VideoClip import ImageClip, TextClip
+#from moviepy.editor import CompositeVideoClip
+from moviepy import *
 import numpy as np
 from PIL import Image
 
@@ -17,7 +18,7 @@ class video_builder:
     lower_offset_text = (1920 / 2) + 40
 
     # General class variables
-    image_path = "resources/background.png"
+    image_path = "resources/background.jpg"
     clip = ImageClip(image_path, duration=duration)
 
     # Constructor, sets the text strings
