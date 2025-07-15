@@ -1,5 +1,3 @@
-#from moviepy.video.VideoClip import ImageClip, TextClip
-#from moviepy.editor import CompositeVideoClip
 from moviepy import *
 import numpy as np
 from PIL import Image
@@ -51,7 +49,7 @@ class video_builder:
     # text (str) = the text to add
     def add_text(self, y_offset, text):
         # Creating the text clip
-        text_clip = TextClip(text=text, font_size=100, color='white', font='Arial Black', stroke_color='black', stroke_width=4)
+        text_clip = TextClip(text=text, size=(1080, round(1920/20)), font_size=100, color='white', font='Arial Black', stroke_color='black', stroke_width=4)
         text_clip = text_clip.with_position(('center', y_offset)).with_duration(self.duration - self.text_start)
         return text_clip
 
