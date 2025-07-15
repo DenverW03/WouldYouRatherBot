@@ -2,28 +2,19 @@ from moviepy import *
 import numpy as np
 from PIL import Image
 
-class video_builder:
+class VideoBuilder:
     """
-    A class that represents the video builder 'machine'
+    A class that represents the video builder 'machine'.
 
-    ...
+    Attributes:
+        upper_text (str): A string that represents the text matching the upper image.
+        lower_text (str): A string that represents the text matching the lower image.
+        upper_image (str): A string containing the URI of the upper image file.
+        lower_image (str): A string containing the URI of the lower image file.
 
-    Attributes
-    ----------
-    upper_text : str
-        a string that represents the text matching the upper image   
-    lower_text : str
-        a string that represents the text matching the lower image
-    upper_image : str
-        a string containing the URI of the upper image file
-    lower_image : str
-        a string containing the URI of the lower image file
-
-    Methods
-    -------
-    build()
-        builds the resulting composite video clip from the arguments initialized by the constructor call
-
+    Methods:
+        build(): Builds the resulting composite video clip from the arguments
+            initialized by the constructor call.
     """
     # Settings class variables
     duration = 10
@@ -42,13 +33,21 @@ class video_builder:
     clip = ImageClip(image_path, duration=duration)
 
     def __init__(self, upper_text, lower_text, upper_image, lower_image):
+        """Initialize the video_builder with texts and image paths.
+
+        Args:
+            upper_text (str): Text for the upper image.
+            lower_text (str): Text for the lower image.
+            upper_image (str): Path to the upper image.
+            lower_image (str): Path to the lower image.
+        """
         self.upper_text = upper_text
         self.lower_text = lower_text
         self.upper_image = upper_image
         self.lower_image = lower_image
 
-    # Function to build the video
     def build(self):
+        """Build the resulting composite video clip and save it."""
         # Getting composite clips for each piece
         upper_clip = self.add_image(self.upper_offset, False, self.upper_image)
         lower_clip = self.add_image(self.lower_offset, True, self.lower_image)
@@ -63,20 +62,32 @@ class video_builder:
         # Saving the final clip
         final_clip.write_videofile("out/test.mp4", fps=30)
 
-    # Creates a text clip and returns it
-    # y_offset (int) = the position on screen, to place with upper or lower choice
-    # text (str) = the text to add
     def add_text(self, y_offset, text):
+        """Create and return a text clip.
+
+        Args:
+            y_offset (int): The vertical position on the screen.
+            text (str): The text to add.
+
+        Returns:
+            TextClip: The created text clip.
+        """
         # Creating the text clip
         text_clip = TextClip(text=text, size=(1080, 1920), vertical_align="top", font_size=100, color='white', font='Arial Black', stroke_color='black', stroke_width=4)
         text_clip = text_clip.with_position(('center', y_offset)).with_duration(self.duration - self.text_start)
         return text_clip
 
-    # Adds an image and animates it
-    # y_offset (int) = the y offset on the screen, to dictate whether upper or lower
-    # side (bool) = the side the entrance animation starts from, true = left, false = right
-    # image_path (str) = a str containing the path to the image
     def add_image(self, y_offset, side, image_path):
+        """Add and animate an image.
+
+        Args:
+            y_offset (int): The y offset on the screen.
+            side (bool): The side the entrance animation starts from (True for left, False for right).
+            image_path (str): The path to the image.
+
+        Returns:
+            ImageClip: The animated image clip.
+        """
         # Load the image
         image = ImageClip(image_path, duration=self.duration)
         
@@ -135,8 +146,15 @@ class video_builder:
         
         return image
 
-    # This function calculates the resize multiplier for a clip
     def calc_resize_mult(self, clip):
+        """Calculate the resize multiplier for a clip.
+
+        Args:
+            clip (ImageClip): The clip to calculate the resize for.
+
+        Returns:
+            float: The resize multiplier.
+        """
         # Calculating scaling dimension used from clip
         largest_dimension = clip.w if clip.w > clip.h else clip.h
 
