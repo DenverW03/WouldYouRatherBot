@@ -3,6 +3,28 @@ import numpy as np
 from PIL import Image
 
 class video_builder:
+    """
+    A class that represents the video builder 'machine'
+
+    ...
+
+    Attributes
+    ----------
+    upper_text : str
+        a string that represents the text matching the upper image   
+    lower_text : str
+        a string that represents the text matching the lower image
+    upper_image : str
+        a string containing the URI of the upper image file
+    lower_image : str
+        a string containing the URI of the lower image file
+
+    Methods
+    -------
+    build()
+        builds the resulting composite video clip from the arguments initialized by the constructor call
+
+    """
     # Settings class variables
     duration = 10
     animation_duration = 0.3
@@ -19,9 +41,6 @@ class video_builder:
     image_path = "resources/background.jpg"
     clip = ImageClip(image_path, duration=duration)
 
-    # Constructor, sets the text strings
-    # upper_text (str) = the text for the upper choice
-    # lower_text (str) = the text for the lower choice
     def __init__(self, upper_text, lower_text, upper_image, lower_image):
         self.upper_text = upper_text
         self.lower_text = lower_text
