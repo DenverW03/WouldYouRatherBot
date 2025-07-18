@@ -1,6 +1,5 @@
-from generate_video import video_builder
+from generate_video import build_video
 
 # Main function is used to drive the steps of building a video
 if __name__ == '__main__':
-    vid_builder = video_builder("Be a chef", "Be a doctor", "resources/upper.jpg", "resources/lower.jpg")
-    vid_builder.build()
+    build_video("Be a chef", "Be a doctor", "resources/upper.jpg", "resources/lower.jpg", "out/video.mp4")
