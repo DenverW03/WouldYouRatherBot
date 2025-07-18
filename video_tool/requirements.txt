@@ -1,3 +1,5 @@
 moviepy
 pillow
 numpy
+ddgs
+requests

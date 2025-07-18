@@ -1,6 +1,7 @@
 from moviepy import *
 import numpy as np
 from PIL import Image
+from image_retrieval import get_image
 
 # Global variables (video settings)
 duration = 10
@@ -15,14 +16,14 @@ upper_offset_text = (1920 / 2) - 200
 lower_offset_text = (1920 / 2) + 40
 
 # General class variables
-image_path = "resources/background.jpg"
+image_path = "../resources/background.jpg"
 clip = ImageClip(image_path, duration=duration)
 
 def build_video(upper_text, lower_text, upper_image, lower_image, save_uri):
     """Build the resulting composite video clip and save it to the specified location."""
     # Getting composite clips for each piece
-    upper_clip = add_image(upper_offset, False, upper_image)
-    lower_clip = add_image(lower_offset, True, lower_image)
+    upper_clip = add_image(upper_offset, False, get_image(upper_image))
+    lower_clip = add_image(lower_offset, True, get_image(lower_image))
 
     # Creating the text clips
     upper_clip_text = add_text(upper_offset_text, upper_text)
@@ -49,7 +50,7 @@ def add_text( y_offset, text):
     text_clip = text_clip.with_position(('center', y_offset)).with_duration(duration - text_start)
     return text_clip
 
-def add_image( y_offset, side, image_path):
+def add_image( y_offset, side, image):
     """Add and animate an image.
 
     Args:
@@ -61,7 +62,7 @@ def add_image( y_offset, side, image_path):
         ImageClip: The animated image clip.
     """
     # Load the image
-    image = ImageClip(image_path, duration=duration)
+    image = ImageClip(np.array(image), duration=duration)
     
     # Resize the image to fit max_dimension
     image = image.resized(calc_resize_mult(image))
