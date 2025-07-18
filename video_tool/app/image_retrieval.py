@@ -6,7 +6,7 @@ import requests
 def get_image(search_term) -> Image:
     # Get image search result
     res = DDGS().images(
-        query="cartoon " + search_term,
+        query="cartoon " + search_term + "without watermark",
         safesearch="on",
         page=1,
     )
