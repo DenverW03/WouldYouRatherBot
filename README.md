@@ -5,7 +5,7 @@ A web application that generates "Would You Rather?" style short-form videos wit
 ## Features
 
 - Simple web interface for video generation
-- **Direct image upload** - no external API dependencies
+- **Direct image upload** - no API dependencies
 - Image preview before generating
 - Animated image entrance/exit effects
 - Red/blue themed UI matching the video style
@@ -64,28 +64,6 @@ reflex run
 - WebP (.webp)
 - BMP (.bmp)
 
-## Project Structure
-
-```
-WouldYouRatherBot/
-├── would_you_rather_bot/       # Main Reflex application
-│   ├── __init__.py
-│   ├── would_you_rather_bot.py # Main app and state
-│   ├── components/             # UI components
-│   │   └── __init__.py
-│   ├── services/               # Business logic
-│   │   ├── __init__.py
-│   │   ├── video_generator.py  # Video generation logic
-│   │   └── image_retrieval.py  # Image processing
-│   └── assets/                 # Static assets
-│       ├── background.jpg      # Video background template
-│       └── DejaVuSans-Bold.ttf # Bundled font for text rendering
-├── rxconfig.py                 # Reflex configuration
-├── environment.yml             # Conda environment specification
-├── requirements.txt            # pip dependencies
-└── README.md
-```
-
 ## Configuration
 
 The video settings can be adjusted in `would_you_rather_bot/services/video_generator.py`:
@@ -97,7 +75,7 @@ The video settings can be adjusted in `would_you_rather_bot/services/video_gener
 
 ## Requirements
 
-- Python 3.9+
+- Python 3.12+ (Primarily due to some moviepy intricacies)
 - FFmpeg (for video encoding)
 
 ## License
