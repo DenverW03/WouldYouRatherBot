@@ -1,6 +1,8 @@
 """Would You Rather Bot - Main Reflex Application."""
 
+import base64
 import os
+import tempfile
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -40,7 +42,10 @@ class State(rx.State):
     is_generating: bool = False
     error_message: str = ""
     success_message: str = ""
-    video_filename: str = ""
+
+    # Video data for download (base64 encoded)
+    video_data: Optional[str] = None
+    video_ready: bool = False
 
     # Upload progress
     is_uploading_upper: bool = False
@@ -86,7 +91,6 @@ class State(rx.State):
                 return
 
             # Store as base64 for state persistence
-            import base64
             self.upper_image_data = base64.b64encode(upload_data).decode("utf-8")
             self.upper_image_name = file.filename or "image"
 
@@ -117,7 +121,6 @@ class State(rx.State):
                 return
 
             # Store as base64 for state persistence
-            import base64
             self.lower_image_data = base64.b64encode(upload_data).decode("utf-8")
             self.lower_image_name = file.filename or "image"
 
@@ -162,7 +165,8 @@ class State(rx.State):
         async with self:
             self.error_message = ""
             self.success_message = ""
-            self.video_filename = ""
+            self.video_data = None
+            self.video_ready = False
 
             if not self._validate_inputs():
                 return
@@ -170,40 +174,47 @@ class State(rx.State):
             self.is_generating = True
 
         try:
-            # Process the uploaded images
+            # Get data from state
             async with self:
                 upper_image_data = self.upper_image_data
                 lower_image_data = self.lower_image_data
                 upper_text = self.upper_text.strip()
                 lower_text = self.lower_text.strip()
 
+            # Process the uploaded images
             upper_image = ImageProcessor.process_uploaded_image(upper_image_data)
             lower_image = ImageProcessor.process_uploaded_image(lower_image_data)
 
-            # Generate unique filename
-            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-            unique_id = str(uuid.uuid4())[:8]
-            filename = f"would_you_rather_{timestamp}_{unique_id}.mp4"
+            # Create a temporary file for the video
+            with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_file:
+                output_path = tmp_file.name
 
-            # Get output path
-            output_dir = Path("output")
-            output_dir.mkdir(exist_ok=True)
-            output_path = str(output_dir / filename)
+            try:
+                # Generate the video
+                generator = VideoGenerator()
+                generator.generate(
+                    upper_text=upper_text,
+                    lower_text=lower_text,
+                    upper_image=upper_image,
+                    lower_image=lower_image,
+                    output_path=output_path,
+                )
 
-            # Generate the video
-            generator = VideoGenerator()
-            generator.generate(
-                upper_text=upper_text,
-                lower_text=lower_text,
-                upper_image=upper_image,
-                lower_image=lower_image,
-                output_path=output_path,
-            )
+                # Read the video file and encode as base64
+                with open(output_path, "rb") as f:
+                    video_bytes = f.read()
+                video_base64 = base64.b64encode(video_bytes).decode("utf-8")
 
-            async with self:
-                self.success_message = "Video generated successfully!"
-                self.video_filename = filename
-                self.is_generating = False
+                async with self:
+                    self.video_data = video_base64
+                    self.video_ready = True
+                    self.success_message = "Video generated successfully! Click download to save."
+                    self.is_generating = False
+
+            finally:
+                # Clean up temporary file
+                if os.path.exists(output_path):
+                    os.unlink(output_path)
 
         except (VideoGeneratorError, ImageProcessingError) as e:
             async with self:
@@ -213,6 +224,29 @@ class State(rx.State):
             async with self:
                 self.error_message = f"An unexpected error occurred: {str(e)}"
                 self.is_generating = False
+
+    @rx.event
+    def download_video(self):
+        """Trigger video download in browser."""
+        if not self.video_data:
+            return
+
+        # Generate filename
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        filename = f"would_you_rather_{timestamp}.mp4"
+
+        # Return download action
+        return rx.download(
+            data=f"data:video/mp4;base64,{self.video_data}",
+            filename=filename,
+        )
+
+    @rx.event
+    def clear_video(self):
+        """Clear the generated video."""
+        self.video_data = None
+        self.video_ready = False
+        self.success_message = ""
 
     @rx.var
     def can_generate(self) -> bool:
@@ -249,13 +283,6 @@ class State(rx.State):
             return f"data:image/png;base64,{self.lower_image_data}"
         return ""
 
-    @rx.var
-    def video_download_url(self) -> str:
-        """Get the download URL for the generated video."""
-        if self.video_filename:
-            return f"/output/{self.video_filename}"
-        return ""
-
 
 def input_field(
     label: str,
@@ -286,7 +313,7 @@ def input_field(
             _placeholder={"color": "rgba(255, 255, 255, 0.6)"},
             _focus={
                 "border_color": COLORS["white"],
-                "box_shadow": f"0 0 0 3px rgba(255, 255, 255, 0.3)",
+                "box_shadow": "0 0 0 3px rgba(255, 255, 255, 0.3)",
                 "outline": "none",
             },
         ),
@@ -533,11 +560,12 @@ def status_messages() -> rx.Component:
 def download_button() -> rx.Component:
     """Create the download button for generated videos."""
     return rx.cond(
-        State.video_filename != "",
-        rx.link(
+        State.video_ready,
+        rx.hstack(
             rx.button(
                 rx.icon("download", size=20),
                 rx.text("Download Video", margin_left="0.5em"),
+                on_click=State.download_video,
                 background=COLORS["black"],
                 color=COLORS["white"],
                 padding="1em 2em",
@@ -548,8 +576,18 @@ def download_button() -> rx.Component:
                 align_items="center",
                 _hover={"opacity": "0.9"},
             ),
-            href=State.video_download_url,
-            is_external=True,
+            rx.button(
+                rx.icon("x", size=20),
+                on_click=State.clear_video,
+                background="transparent",
+                color=COLORS["black"],
+                padding="0.5em",
+                border_radius="8px",
+                cursor="pointer",
+                _hover={"background": "rgba(0, 0, 0, 0.1)"},
+            ),
+            spacing="2",
+            align_items="center",
         ),
     )
 

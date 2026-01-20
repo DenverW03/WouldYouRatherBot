@@ -45,9 +45,6 @@ env/
 *.DS_Store
 
 # Project specific
-output/*.mp4
-output/*.avi
-output/*.mov
 pyrightconfig.json
 
 # Org files

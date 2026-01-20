@@ -54,7 +54,7 @@ reflex run
    - **Option 2 Text**: The second option text
    - **Option 2 Image**: Upload an image for the second option
 4. Click "Generate Video"
-5. Wait for processing, then download your video
+5. Wait for processing, then click "Download Video" to save directly to your browser's downloads
 
 ## Supported Image Formats
 
@@ -78,8 +78,8 @@ WouldYouRatherBot/
 │   │   ├── video_generator.py  # Video generation logic
 │   │   └── image_retrieval.py  # Image processing
 │   └── assets/                 # Static assets
-│       └── background.jpg      # Video background template
-├── output/                     # Generated videos directory
+│       ├── background.jpg      # Video background template
+│       └── DejaVuSans-Bold.ttf # Bundled font for text rendering
 ├── rxconfig.py                 # Reflex configuration
 ├── environment.yml             # Conda environment specification
 ├── requirements.txt            # pip dependencies
