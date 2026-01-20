@@ -30,21 +30,29 @@ class VideoGenerator:
     VIDEO_WIDTH = 1080
     VIDEO_HEIGHT = 1920
 
-    def __init__(self, background_path: Optional[str] = None):
+    def __init__(self, background_path: Optional[str] = None, font_path: Optional[str] = None):
         """Initialize the video generator.
 
         Args:
             background_path: Path to the background image. If None, uses default.
+            font_path: Path to the font file. If None, uses bundled font.
         """
+        assets_dir = Path(__file__).parent.parent / "assets"
+
         if background_path is None:
-            # Use the default background from assets
-            assets_dir = Path(__file__).parent.parent / "assets"
             background_path = str(assets_dir / "background.jpg")
+
+        if font_path is None:
+            font_path = str(assets_dir / "DejaVuSans-Bold.ttf")
 
         if not os.path.exists(background_path):
             raise VideoGeneratorError(f"Background image not found: {background_path}")
 
+        if not os.path.exists(font_path):
+            raise VideoGeneratorError(f"Font file not found: {font_path}")
+
         self.background_path = background_path
+        self.font_path = font_path
         self._calculate_offsets()
 
     def _calculate_offsets(self):
@@ -147,7 +155,7 @@ class VideoGenerator:
             vertical_align="top",
             font_size=100,
             color="white",
-            font="Arial-Black",
+            font=self.font_path,
             stroke_color="black",
             stroke_width=4,
         )
