@@ -235,9 +235,12 @@ class State(rx.State):
         timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
         filename = f"would_you_rather_{timestamp}.mp4"
 
-        # Return download action
+        # Decode base64 back to bytes for download
+        video_bytes = base64.b64decode(self.video_data)
+
+        # Return download action with raw bytes
         return rx.download(
-            data=f"data:video/mp4;base64,{self.video_data}",
+            data=video_bytes,
             filename=filename,
         )
 
