@@ -2,13 +2,11 @@
 
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Union
 
 import numpy as np
 from moviepy import ImageClip, CompositeVideoClip, TextClip
 from PIL import Image
-
-from .image_retrieval import ImageRetriever, ImageRetrievalError
 
 
 class VideoGeneratorError(Exception):
@@ -63,8 +61,8 @@ class VideoGenerator:
         self,
         upper_text: str,
         lower_text: str,
-        upper_image_search: str,
-        lower_image_search: str,
+        upper_image: Image.Image,
+        lower_image: Image.Image,
         output_path: str,
     ) -> str:
         """Generate a 'Would You Rather?' video.
@@ -72,8 +70,8 @@ class VideoGenerator:
         Args:
             upper_text: Text for the first (upper) option.
             lower_text: Text for the second (lower) option.
-            upper_image_search: Search term for the upper image.
-            lower_image_search: Search term for the lower image.
+            upper_image: PIL Image for the upper option.
+            lower_image: PIL Image for the lower option.
             output_path: Path where the video will be saved.
 
         Returns:
@@ -90,13 +88,6 @@ class VideoGenerator:
 
             # Create background clip
             background_clip = ImageClip(self.background_path, duration=self.DURATION)
-
-            # Retrieve images
-            try:
-                upper_image = ImageRetriever.get_image(upper_image_search)
-                lower_image = ImageRetriever.get_image(lower_image_search)
-            except ImageRetrievalError as e:
-                raise VideoGeneratorError(f"Failed to retrieve images: {str(e)}")
 
             # Create image clips with animations
             upper_clip = self._create_animated_image(

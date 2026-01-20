@@ -1,227 +1,207 @@
-"""Image retrieval service using DuckDuckGo image search."""
+"""Image handling service for processing uploaded images."""
 
-import random
-import time
+import base64
 from io import BytesIO
-from typing import Optional, List, Dict
+from pathlib import Path
+from typing import Optional, Union
 
-import requests
-from duckduckgo_search import DDGS
 from PIL import Image
 
 
-class ImageRetrievalError(Exception):
-    """Exception raised when image retrieval fails."""
+class ImageProcessingError(Exception):
+    """Exception raised when image processing fails."""
 
     pass
 
 
-class ImageRetriever:
-    """Handles image retrieval from web searches with rate limit handling."""
+class ImageProcessor:
+    """Handles image processing for uploaded images."""
 
-    # Realistic browser user agents to rotate through
-    USER_AGENTS: List[str] = [
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:121.0) Gecko/20100101 Firefox/121.0",
-        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.2 Safari/605.1.15",
-        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/119.0.0.0 Safari/537.36 Edg/119.0.0.0",
-    ]
-
-    # Retry configuration
-    MAX_RETRIES: int = 3
-    BASE_DELAY: float = 1.0  # Base delay in seconds
-    MAX_DELAY: float = 10.0  # Maximum delay between retries
-    JITTER_RANGE: tuple = (0.5, 1.5)  # Random multiplier range for delay
+    # Supported image formats
+    SUPPORTED_FORMATS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".bmp"}
+    
+    # Maximum image dimensions (will be resized if larger)
+    MAX_DIMENSION = 2000
 
     @classmethod
-    def _get_random_headers(cls) -> Dict[str, str]:
-        """Generate realistic browser headers with a random user agent.
-
-        Returns:
-            Dictionary of HTTP headers.
-        """
-        return {
-            "User-Agent": random.choice(cls.USER_AGENTS),
-            "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
-            "Accept-Language": "en-US,en;q=0.9",
-            "Accept-Encoding": "gzip, deflate, br",
-            "Connection": "keep-alive",
-            "Sec-Fetch-Dest": "image",
-            "Sec-Fetch-Mode": "no-cors",
-            "Sec-Fetch-Site": "cross-site",
-            "Referer": "https://duckduckgo.com/",
-        }
-
-    @classmethod
-    def _calculate_backoff_delay(cls, attempt: int) -> float:
-        """Calculate delay with exponential backoff and jitter.
+    def process_uploaded_image(
+        cls,
+        image_data: Union[bytes, str],
+        filename: Optional[str] = None,
+    ) -> Image.Image:
+        """Process an uploaded image from bytes or base64 string.
 
         Args:
-            attempt: The current attempt number (0-indexed).
+            image_data: Raw image bytes or base64-encoded string.
+            filename: Optional filename for format validation.
 
         Returns:
-            Delay in seconds.
-        """
-        # Exponential backoff: 1s, 2s, 4s, 8s, etc.
-        delay = cls.BASE_DELAY * (2 ** attempt)
-        # Cap at maximum delay
-        delay = min(delay, cls.MAX_DELAY)
-        # Add random jitter to prevent thundering herd
-        jitter = random.uniform(*cls.JITTER_RANGE)
-        return delay * jitter
-
-    @classmethod
-    def _download_image_with_retry(
-        cls, 
-        url: str, 
-        session: requests.Session
-    ) -> Optional[Image.Image]:
-        """Download an image with retry logic for rate limiting.
-
-        Args:
-            url: The image URL to download.
-            session: Requests session to use.
-
-        Returns:
-            PIL Image if successful, None otherwise.
-        """
-        last_error = None
-
-        for attempt in range(cls.MAX_RETRIES):
-            try:
-                # Add small random delay before each request to avoid rate limits
-                if attempt > 0:
-                    delay = cls._calculate_backoff_delay(attempt)
-                    time.sleep(delay)
-                else:
-                    # Small initial delay with jitter
-                    time.sleep(random.uniform(0.2, 0.8))
-
-                # Make request with fresh headers
-                headers = cls._get_random_headers()
-                response = session.get(url, headers=headers, timeout=15)
-
-                # Handle rate limiting specifically
-                if response.status_code == 403:
-                    last_error = f"403 Forbidden (attempt {attempt + 1})"
-                    continue
-                elif response.status_code == 429:
-                    last_error = f"429 Too Many Requests (attempt {attempt + 1})"
-                    # Longer delay for explicit rate limiting
-                    time.sleep(cls._calculate_backoff_delay(attempt + 1))
-                    continue
-
-                response.raise_for_status()
-
-                # Verify it's actually an image
-                content_type = response.headers.get("Content-Type", "")
-                if not content_type.startswith("image/"):
-                    last_error = f"Invalid content type: {content_type}"
-                    continue
-
-                # Open and validate the image
-                image_data = BytesIO(response.content)
-                image = Image.open(image_data)
-                
-                # Force load to verify image is valid
-                image.load()
-
-                # Convert to RGB if necessary (for consistency with video generation)
-                if image.mode in ("RGBA", "P", "LA"):
-                    # Create white background for transparent images
-                    if image.mode in ("RGBA", "LA", "P"):
-                        background = Image.new("RGB", image.size, (255, 255, 255))
-                        if image.mode == "P":
-                            image = image.convert("RGBA")
-                        background.paste(image, mask=image.split()[-1] if image.mode == "RGBA" else None)
-                        image = background
-                    else:
-                        image = image.convert("RGB")
-                elif image.mode != "RGB":
-                    image = image.convert("RGB")
-
-                return image
-
-            except requests.exceptions.Timeout:
-                last_error = f"Timeout (attempt {attempt + 1})"
-                continue
-            except requests.exceptions.RequestException as e:
-                last_error = f"Request error: {str(e)} (attempt {attempt + 1})"
-                continue
-            except (IOError, OSError) as e:
-                last_error = f"Image processing error: {str(e)} (attempt {attempt + 1})"
-                continue
-
-        return None
-
-    @classmethod
-    def get_image(cls, search_term: str) -> Image.Image:
-        """Search for and retrieve an image based on a search term.
-
-        Args:
-            search_term: The term to search for images.
-
-        Returns:
-            A PIL Image object.
+            A processed PIL Image object in RGB format.
 
         Raises:
-            ImageRetrievalError: If the image cannot be retrieved.
+            ImageProcessingError: If the image cannot be processed.
         """
         try:
-            # Add small delay before search to avoid rate limiting the search API
-            time.sleep(random.uniform(0.3, 0.7))
+            # Handle base64-encoded data
+            if isinstance(image_data, str):
+                # Remove data URL prefix if present (e.g., "data:image/png;base64,")
+                if "," in image_data:
+                    image_data = image_data.split(",", 1)[1]
+                image_data = base64.b64decode(image_data)
 
-            # Perform image search with DuckDuckGo
-            # Request more results to have fallbacks if some fail
-            results = list(DDGS().images(
-                keywords=f"cartoon {search_term} without watermark",
-                safesearch="on",
-                max_results=15,
-            ))
+            # Validate file extension if filename provided
+            if filename:
+                ext = Path(filename).suffix.lower()
+                if ext and ext not in cls.SUPPORTED_FORMATS:
+                    raise ImageProcessingError(
+                        f"Unsupported image format: {ext}. "
+                        f"Supported formats: {', '.join(cls.SUPPORTED_FORMATS)}"
+                    )
 
-            if not results:
-                raise ImageRetrievalError(f"No search results found for '{search_term}'")
-
-            # Shuffle results to distribute load across different sources
-            random.shuffle(results)
-
-            # Create a session for connection pooling
-            session = requests.Session()
+            # Open the image
+            image_buffer = BytesIO(image_data)
+            image = Image.open(image_buffer)
             
-            # Track errors for debugging
-            errors = []
+            # Verify the image is valid by loading it
+            image.load()
 
-            # Try to get an image from the results
-            for result in results:
-                image_url = result.get("image")
-                if not image_url:
-                    continue
+            # Convert to RGB format for video compatibility
+            image = cls._convert_to_rgb(image)
 
-                # Skip known problematic domains
-                problematic_domains = ["pinterest.", "facebook.", "instagram."]
-                if any(domain in image_url.lower() for domain in problematic_domains):
-                    continue
+            # Resize if too large
+            image = cls._resize_if_needed(image)
 
-                image = cls._download_image_with_retry(image_url, session)
-                if image is not None:
-                    session.close()
-                    return image
-                else:
-                    errors.append(f"Failed to download: {image_url[:50]}...")
+            return image
 
-            session.close()
-            
-            error_summary = "; ".join(errors[:3])  # Show first 3 errors
-            raise ImageRetrievalError(
-                f"Could not retrieve any valid images for '{search_term}'. "
-                f"Tried {len(results)} sources. Errors: {error_summary}"
-            )
-
-        except ImageRetrievalError:
+        except ImageProcessingError:
             raise
         except Exception as e:
-            raise ImageRetrievalError(
-                f"Failed to retrieve image for '{search_term}': {str(e)}"
-            )
+            raise ImageProcessingError(f"Failed to process image: {str(e)}")
+
+    @classmethod
+    def load_from_file(cls, file_path: Union[str, Path]) -> Image.Image:
+        """Load and process an image from a file path.
+
+        Args:
+            file_path: Path to the image file.
+
+        Returns:
+            A processed PIL Image object in RGB format.
+
+        Raises:
+            ImageProcessingError: If the image cannot be loaded or processed.
+        """
+        try:
+            file_path = Path(file_path)
+            
+            if not file_path.exists():
+                raise ImageProcessingError(f"Image file not found: {file_path}")
+
+            ext = file_path.suffix.lower()
+            if ext not in cls.SUPPORTED_FORMATS:
+                raise ImageProcessingError(
+                    f"Unsupported image format: {ext}. "
+                    f"Supported formats: {', '.join(cls.SUPPORTED_FORMATS)}"
+                )
+
+            image = Image.open(file_path)
+            image.load()
+
+            # Convert to RGB format
+            image = cls._convert_to_rgb(image)
+
+            # Resize if too large
+            image = cls._resize_if_needed(image)
+
+            return image
+
+        except ImageProcessingError:
+            raise
+        except Exception as e:
+            raise ImageProcessingError(f"Failed to load image from {file_path}: {str(e)}")
+
+    @classmethod
+    def _convert_to_rgb(cls, image: Image.Image) -> Image.Image:
+        """Convert an image to RGB format, handling transparency.
+
+        Args:
+            image: PIL Image in any format.
+
+        Returns:
+            PIL Image in RGB format.
+        """
+        if image.mode == "RGB":
+            return image
+
+        if image.mode in ("RGBA", "LA", "P"):
+            # Handle transparency by compositing onto white background
+            if image.mode == "P":
+                image = image.convert("RGBA")
+            
+            # Create white background
+            background = Image.new("RGB", image.size, (255, 255, 255))
+            
+            # Paste image onto background using alpha channel as mask
+            if image.mode in ("RGBA", "LA"):
+                # Split to get alpha channel
+                if image.mode == "LA":
+                    image = image.convert("RGBA")
+                background.paste(image, mask=image.split()[3])
+            else:
+                background.paste(image)
+            
+            return background
+
+        # For other modes (L, 1, etc.), just convert directly
+        return image.convert("RGB")
+
+    @classmethod
+    def _resize_if_needed(cls, image: Image.Image) -> Image.Image:
+        """Resize image if it exceeds maximum dimensions.
+
+        Args:
+            image: PIL Image to potentially resize.
+
+        Returns:
+            Original or resized PIL Image.
+        """
+        width, height = image.size
+        
+        if width <= cls.MAX_DIMENSION and height <= cls.MAX_DIMENSION:
+            return image
+
+        # Calculate new size maintaining aspect ratio
+        if width > height:
+            new_width = cls.MAX_DIMENSION
+            new_height = int(height * (cls.MAX_DIMENSION / width))
+        else:
+            new_height = cls.MAX_DIMENSION
+            new_width = int(width * (cls.MAX_DIMENSION / height))
+
+        return image.resize((new_width, new_height), Image.Resampling.LANCZOS)
+
+    @classmethod
+    def create_placeholder(
+        cls,
+        width: int = 500,
+        height: int = 500,
+        color: tuple = (200, 200, 200),
+        text: Optional[str] = None,
+    ) -> Image.Image:
+        """Create a placeholder image.
+
+        Args:
+            width: Image width in pixels.
+            height: Image height in pixels.
+            color: RGB tuple for background color.
+            text: Optional text to display on the placeholder.
+
+        Returns:
+            A placeholder PIL Image.
+        """
+        image = Image.new("RGB", (width, height), color)
+        
+        # Note: Text rendering would require PIL's ImageDraw and a font
+        # Keeping it simple for now with just a colored rectangle
+        
+        return image

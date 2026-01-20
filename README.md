@@ -5,10 +5,11 @@ A web application that generates "Would You Rather?" style short-form videos wit
 ## Features
 
 - Simple web interface for video generation
-- Automatic image retrieval based on search terms
+- **Direct image upload** - no external API dependencies
+- Image preview before generating
 - Animated image entrance/exit effects
 - Red/blue themed UI matching the video style
-- Local video output
+- Local video output with download
 
 ## Installation
 
@@ -48,12 +49,20 @@ reflex run
 1. Start the application with `reflex run`
 2. Open your browser to `http://localhost:3000`
 3. Fill in the form:
-   - **Upper Text**: The first "Would you rather" option text
-   - **Lower Text**: The second option text
-   - **Upper Image Search**: Search term for the top image
-   - **Lower Image Search**: Search term for the bottom image
+   - **Option 1 Text**: The first "Would you rather" option text
+   - **Option 1 Image**: Upload an image for the first option
+   - **Option 2 Text**: The second option text
+   - **Option 2 Image**: Upload an image for the second option
 4. Click "Generate Video"
 5. Wait for processing, then download your video
+
+## Supported Image Formats
+
+- JPEG (.jpg, .jpeg)
+- PNG (.png)
+- GIF (.gif)
+- WebP (.webp)
+- BMP (.bmp)
 
 ## Project Structure
 
@@ -67,7 +76,7 @@ WouldYouRatherBot/
 │   ├── services/               # Business logic
 │   │   ├── __init__.py
 │   │   ├── video_generator.py  # Video generation logic
-│   │   └── image_retrieval.py  # Image search functionality
+│   │   └── image_retrieval.py  # Image processing
 │   └── assets/                 # Static assets
 │       └── background.jpg      # Video background template
 ├── output/                     # Generated videos directory
@@ -81,9 +90,10 @@ WouldYouRatherBot/
 
 The video settings can be adjusted in `would_you_rather_bot/services/video_generator.py`:
 
-- `duration`: Total video length in seconds
-- `animation_duration`: Length of entrance/exit animations
-- `max_dimension`: Maximum image dimension in pixels
+- `DURATION`: Total video length in seconds (default: 10)
+- `ANIMATION_DURATION`: Length of entrance/exit animations (default: 0.3s)
+- `MAX_DIMENSION`: Maximum image dimension in pixels (default: 500)
+- `FPS`: Frames per second (default: 30)
 
 ## Requirements
 

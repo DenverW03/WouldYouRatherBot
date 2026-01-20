@@ -4,16 +4,18 @@ import os
 import uuid
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 import reflex as rx
 
 from .services.video_generator import VideoGenerator, VideoGeneratorError
+from .services.image_retrieval import ImageProcessor, ImageProcessingError
 
 
 # Color constants matching the video style
 COLORS = {
-    "red": "#ED1C24",  # Upper section red
-    "blue": "#3D9AE8",  # Lower section blue
+    "red": "#ED1C24",
+    "blue": "#3D9AE8",
     "black": "#000000",
     "white": "#FFFFFF",
     "dark_gray": "#1a1a1a",
@@ -27,14 +29,22 @@ class State(rx.State):
     # Form inputs
     upper_text: str = ""
     lower_text: str = ""
-    upper_image_search: str = ""
-    lower_image_search: str = ""
+
+    # Image upload tracking
+    upper_image_data: Optional[str] = None
+    lower_image_data: Optional[str] = None
+    upper_image_name: str = ""
+    lower_image_name: str = ""
 
     # Status tracking
     is_generating: bool = False
     error_message: str = ""
     success_message: str = ""
     video_filename: str = ""
+
+    # Upload progress
+    is_uploading_upper: bool = False
+    is_uploading_lower: bool = False
 
     @rx.event
     def clear_messages(self):
@@ -55,34 +65,94 @@ class State(rx.State):
         self.clear_messages()
 
     @rx.event
-    def set_upper_image_search(self, value: str):
-        """Set the upper image search term."""
-        self.upper_image_search = value
+    async def handle_upper_image_upload(self, files: list[rx.UploadFile]):
+        """Handle upper image file upload."""
+        self.is_uploading_upper = True
+        self.clear_messages()
+
+        try:
+            if not files:
+                self.error_message = "No file selected for Option 1 image."
+                return
+
+            file = files[0]
+            upload_data = await file.read()
+
+            # Validate the image can be processed
+            try:
+                ImageProcessor.process_uploaded_image(upload_data, file.filename)
+            except ImageProcessingError as e:
+                self.error_message = f"Option 1 image error: {str(e)}"
+                return
+
+            # Store as base64 for state persistence
+            import base64
+            self.upper_image_data = base64.b64encode(upload_data).decode("utf-8")
+            self.upper_image_name = file.filename or "image"
+
+        except Exception as e:
+            self.error_message = f"Failed to upload Option 1 image: {str(e)}"
+        finally:
+            self.is_uploading_upper = False
+
+    @rx.event
+    async def handle_lower_image_upload(self, files: list[rx.UploadFile]):
+        """Handle lower image file upload."""
+        self.is_uploading_lower = True
+        self.clear_messages()
+
+        try:
+            if not files:
+                self.error_message = "No file selected for Option 2 image."
+                return
+
+            file = files[0]
+            upload_data = await file.read()
+
+            # Validate the image can be processed
+            try:
+                ImageProcessor.process_uploaded_image(upload_data, file.filename)
+            except ImageProcessingError as e:
+                self.error_message = f"Option 2 image error: {str(e)}"
+                return
+
+            # Store as base64 for state persistence
+            import base64
+            self.lower_image_data = base64.b64encode(upload_data).decode("utf-8")
+            self.lower_image_name = file.filename or "image"
+
+        except Exception as e:
+            self.error_message = f"Failed to upload Option 2 image: {str(e)}"
+        finally:
+            self.is_uploading_lower = False
+
+    @rx.event
+    def clear_upper_image(self):
+        """Clear the upper image."""
+        self.upper_image_data = None
+        self.upper_image_name = ""
         self.clear_messages()
 
     @rx.event
-    def set_lower_image_search(self, value: str):
-        """Set the lower image search term."""
-        self.lower_image_search = value
+    def clear_lower_image(self):
+        """Clear the lower image."""
+        self.lower_image_data = None
+        self.lower_image_name = ""
         self.clear_messages()
 
     def _validate_inputs(self) -> bool:
-        """Validate all form inputs.
-
-        Returns:
-            True if all inputs are valid, False otherwise.
-        """
+        """Validate all form inputs."""
         if not self.upper_text.strip():
-            self.error_message = "Please enter text for the first option."
+            self.error_message = "Please enter text for Option 1."
             return False
         if not self.lower_text.strip():
-            self.error_message = "Please enter text for the second option."
+            self.error_message = "Please enter text for Option 2."
             return False
-        if not self.upper_image_search.strip():
-            self.error_message = "Please enter an image search term for the first option."
+        if not self.upper_image_data:
+            self.error_message = "Please upload an image for Option 1."
             return False
-        if not self.lower_image_search.strip():
-            self.error_message = "Please enter an image search term for the second option."
+        if not self.lower_image_data:
+            self.error_message = "Please upload an image for Option 2."
             return False
         return True
 
@@ -94,13 +164,22 @@ class State(rx.State):
             self.success_message = ""
             self.video_filename = ""
 
-            # Validate inputs
             if not self._validate_inputs():
                 return
 
             self.is_generating = True
 
         try:
+            # Process the uploaded images
+            async with self:
+                upper_image_data = self.upper_image_data
+                lower_image_data = self.lower_image_data
+                upper_text = self.upper_text.strip()
+                lower_text = self.lower_text.strip()
+
+            upper_image = ImageProcessor.process_uploaded_image(upper_image_data)
+            lower_image = ImageProcessor.process_uploaded_image(lower_image_data)
+
             # Generate unique filename
             timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
             unique_id = str(uuid.uuid4())[:8]
@@ -114,19 +193,19 @@ class State(rx.State):
             # Generate the video
             generator = VideoGenerator()
             generator.generate(
-                upper_text=self.upper_text.strip(),
-                lower_text=self.lower_text.strip(),
-                upper_image_search=self.upper_image_search.strip(),
-                lower_image_search=self.lower_image_search.strip(),
+                upper_text=upper_text,
+                lower_text=lower_text,
+                upper_image=upper_image,
+                lower_image=lower_image,
                 output_path=output_path,
             )
 
             async with self:
-                self.success_message = f"Video generated successfully!"
+                self.success_message = "Video generated successfully!"
                 self.video_filename = filename
                 self.is_generating = False
 
-        except VideoGeneratorError as e:
+        except (VideoGeneratorError, ImageProcessingError) as e:
             async with self:
                 self.error_message = str(e)
                 self.is_generating = False
@@ -141,10 +220,34 @@ class State(rx.State):
         return (
             bool(self.upper_text.strip())
             and bool(self.lower_text.strip())
-            and bool(self.upper_image_search.strip())
-            and bool(self.lower_image_search.strip())
+            and bool(self.upper_image_data)
+            and bool(self.lower_image_data)
             and not self.is_generating
         )
+
+    @rx.var
+    def has_upper_image(self) -> bool:
+        """Check if upper image is uploaded."""
+        return bool(self.upper_image_data)
+
+    @rx.var
+    def has_lower_image(self) -> bool:
+        """Check if lower image is uploaded."""
+        return bool(self.lower_image_data)
+
+    @rx.var
+    def upper_image_preview(self) -> str:
+        """Get the upper image preview URL."""
+        if self.upper_image_data:
+            return f"data:image/png;base64,{self.upper_image_data}"
+        return ""
+
+    @rx.var
+    def lower_image_preview(self) -> str:
+        """Get the lower image preview URL."""
+        if self.lower_image_data:
+            return f"data:image/png;base64,{self.lower_image_data}"
+        return ""
 
     @rx.var
     def video_download_url(self) -> str:
@@ -159,26 +262,14 @@ def input_field(
     placeholder: str,
     value: rx.Var,
     on_change: rx.EventHandler,
-    color: str,
 ) -> rx.Component:
-    """Create a styled input field.
-
-    Args:
-        label: The label text.
-        placeholder: Placeholder text for the input.
-        value: The state variable for the value.
-        on_change: Event handler for value changes.
-        color: The accent color for the field.
-
-    Returns:
-        A styled input component.
-    """
+    """Create a styled input field."""
     return rx.box(
         rx.text(
             label,
             font_weight="bold",
             font_size="1.1em",
-            color=color,
+            color=COLORS["white"],
             margin_bottom="0.5em",
         ),
         rx.input(
@@ -187,13 +278,140 @@ def input_field(
             on_change=on_change,
             width="100%",
             padding="0.75em",
-            border=f"2px solid {color}",
+            border=f"2px solid {COLORS['white']}",
             border_radius="8px",
             font_size="1em",
+            background="rgba(255, 255, 255, 0.1)",
+            color=COLORS["white"],
+            _placeholder={"color": "rgba(255, 255, 255, 0.6)"},
             _focus={
-                "border_color": color,
-                "box_shadow": f"0 0 0 3px {color}33",
+                "border_color": COLORS["white"],
+                "box_shadow": f"0 0 0 3px rgba(255, 255, 255, 0.3)",
+                "outline": "none",
             },
+        ),
+        width="100%",
+        margin_bottom="1em",
+    )
+
+
+def image_upload_area(
+    upload_id: str,
+    label: str,
+    has_image: rx.Var,
+    image_preview: rx.Var,
+    image_name: rx.Var,
+    on_upload: rx.EventHandler,
+    on_clear: rx.EventHandler,
+    is_uploading: rx.Var,
+) -> rx.Component:
+    """Create an image upload area with preview."""
+    return rx.box(
+        rx.text(
+            label,
+            font_weight="bold",
+            font_size="1.1em",
+            color=COLORS["white"],
+            margin_bottom="0.5em",
+        ),
+        rx.cond(
+            has_image,
+            # Show preview when image is uploaded
+            rx.box(
+                rx.image(
+                    src=image_preview,
+                    max_height="150px",
+                    max_width="100%",
+                    object_fit="contain",
+                    border_radius="8px",
+                ),
+                rx.hstack(
+                    rx.text(
+                        image_name,
+                        color=COLORS["white"],
+                        font_size="0.9em",
+                        overflow="hidden",
+                        text_overflow="ellipsis",
+                        white_space="nowrap",
+                        flex="1",
+                    ),
+                    rx.button(
+                        rx.icon("x", size=16),
+                        on_click=on_clear,
+                        background="rgba(255, 255, 255, 0.2)",
+                        color=COLORS["white"],
+                        padding="0.3em 0.5em",
+                        border_radius="4px",
+                        cursor="pointer",
+                        _hover={"background": "rgba(255, 255, 255, 0.3)"},
+                    ),
+                    width="100%",
+                    margin_top="0.5em",
+                    align_items="center",
+                    gap="0.5em",
+                ),
+                padding="1em",
+                border=f"2px solid {COLORS['white']}",
+                border_radius="8px",
+                background="rgba(255, 255, 255, 0.1)",
+            ),
+            # Show upload area when no image
+            rx.upload(
+                rx.box(
+                    rx.cond(
+                        is_uploading,
+                        rx.vstack(
+                            rx.spinner(size="2"),
+                            rx.text(
+                                "Uploading...",
+                                color=COLORS["white"],
+                                font_size="0.9em",
+                            ),
+                            spacing="2",
+                            align_items="center",
+                        ),
+                        rx.vstack(
+                            rx.icon("upload", size=32, color=COLORS["white"]),
+                            rx.text(
+                                "Click or drag image here",
+                                color=COLORS["white"],
+                                font_size="0.95em",
+                                text_align="center",
+                            ),
+                            rx.text(
+                                "JPG, PNG, GIF, WebP",
+                                color="rgba(255, 255, 255, 0.6)",
+                                font_size="0.8em",
+                            ),
+                            spacing="2",
+                            align_items="center",
+                        ),
+                    ),
+                    padding="2em",
+                    border=f"2px dashed {COLORS['white']}",
+                    border_radius="8px",
+                    background="rgba(255, 255, 255, 0.05)",
+                    cursor="pointer",
+                    _hover={"background": "rgba(255, 255, 255, 0.1)"},
+                    width="100%",
+                    display="flex",
+                    justify_content="center",
+                    align_items="center",
+                    min_height="120px",
+                ),
+                id=upload_id,
+                accept={
+                    "image/png": [".png"],
+                    "image/jpeg": [".jpg", ".jpeg"],
+                    "image/gif": [".gif"],
+                    "image/webp": [".webp"],
+                    "image/bmp": [".bmp"],
+                },
+                max_files=1,
+                on_drop=on_upload,
+                border="none",
+                padding="0",
+            ),
         ),
         width="100%",
         margin_bottom="1em",
@@ -206,29 +424,17 @@ def option_section(
     text_placeholder: str,
     text_value: rx.Var,
     text_on_change: rx.EventHandler,
+    upload_id: str,
     image_label: str,
-    image_placeholder: str,
-    image_value: rx.Var,
-    image_on_change: rx.EventHandler,
+    has_image: rx.Var,
+    image_preview: rx.Var,
+    image_name: rx.Var,
+    on_upload: rx.EventHandler,
+    on_clear: rx.EventHandler,
+    is_uploading: rx.Var,
     color: str,
 ) -> rx.Component:
-    """Create a section for one 'Would You Rather' option.
-
-    Args:
-        title: Section title.
-        text_label: Label for text input.
-        text_placeholder: Placeholder for text input.
-        text_value: State variable for text.
-        text_on_change: Handler for text changes.
-        image_label: Label for image search input.
-        image_placeholder: Placeholder for image search.
-        image_value: State variable for image search.
-        image_on_change: Handler for image search changes.
-        color: Accent color for the section.
-
-    Returns:
-        A styled section component.
-    """
+    """Create a section for one 'Would You Rather' option."""
     return rx.box(
         rx.heading(
             title,
@@ -242,14 +448,16 @@ def option_section(
             placeholder=text_placeholder,
             value=text_value,
             on_change=text_on_change,
-            color=COLORS["white"],
         ),
-        input_field(
+        image_upload_area(
+            upload_id=upload_id,
             label=image_label,
-            placeholder=image_placeholder,
-            value=image_value,
-            on_change=image_on_change,
-            color=COLORS["white"],
+            has_image=has_image,
+            image_preview=image_preview,
+            image_name=image_name,
+            on_upload=on_upload,
+            on_clear=on_clear,
+            is_uploading=is_uploading,
         ),
         background=color,
         padding="2em",
@@ -288,10 +496,13 @@ def status_messages() -> rx.Component:
         rx.cond(
             State.error_message != "",
             rx.box(
-                rx.text(
-                    State.error_message,
-                    color=COLORS["white"],
+                rx.hstack(
+                    rx.icon("alert-circle", size=20),
+                    rx.text(State.error_message),
+                    spacing="2",
+                    align_items="center",
                 ),
+                color=COLORS["white"],
                 background="#dc3545",
                 padding="1em",
                 border_radius="8px",
@@ -302,10 +513,13 @@ def status_messages() -> rx.Component:
         rx.cond(
             State.success_message != "",
             rx.box(
-                rx.text(
-                    State.success_message,
-                    color=COLORS["white"],
+                rx.hstack(
+                    rx.icon("check-circle", size=20),
+                    rx.text(State.success_message),
+                    spacing="2",
+                    align_items="center",
                 ),
+                color=COLORS["white"],
                 background="#28a745",
                 padding="1em",
                 border_radius="8px",
@@ -332,9 +546,7 @@ def download_button() -> rx.Component:
                 cursor="pointer",
                 display="flex",
                 align_items="center",
-                _hover={
-                    "opacity": "0.9",
-                },
+                _hover={"opacity": "0.9"},
             ),
             href=State.video_download_url,
             is_external=True,
@@ -408,10 +620,14 @@ def index() -> rx.Component:
                     text_placeholder="e.g., Be a chef",
                     text_value=State.upper_text,
                     text_on_change=State.set_upper_text,
-                    image_label="Image Search Term",
-                    image_placeholder="e.g., Chef",
-                    image_value=State.upper_image_search,
-                    image_on_change=State.set_upper_image_search,
+                    upload_id="upper_image_upload",
+                    image_label="Image",
+                    has_image=State.has_upper_image,
+                    image_preview=State.upper_image_preview,
+                    image_name=State.upper_image_name,
+                    on_upload=State.handle_upper_image_upload,
+                    on_clear=State.clear_upper_image,
+                    is_uploading=State.is_uploading_upper,
                     color=COLORS["red"],
                 ),
                 # OR Divider
@@ -423,10 +639,14 @@ def index() -> rx.Component:
                     text_placeholder="e.g., Be a doctor",
                     text_value=State.lower_text,
                     text_on_change=State.set_lower_text,
-                    image_label="Image Search Term",
-                    image_placeholder="e.g., Doctor",
-                    image_value=State.lower_image_search,
-                    image_on_change=State.set_lower_image_search,
+                    upload_id="lower_image_upload",
+                    image_label="Image",
+                    has_image=State.has_lower_image,
+                    image_preview=State.lower_image_preview,
+                    image_name=State.lower_image_name,
+                    on_upload=State.handle_lower_image_upload,
+                    on_clear=State.clear_lower_image,
+                    is_uploading=State.is_uploading_lower,
                     color=COLORS["blue"],
                 ),
                 # Generate Button
@@ -460,7 +680,6 @@ app = rx.App(
     style={
         "font_family": "system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif",
     },
-    stylesheets=[],
 )
 
 app.add_page(index, title="Would You Rather? Video Generator")
