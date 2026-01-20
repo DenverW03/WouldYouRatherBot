@@ -1,0 +1,15 @@
+name: wouldyourather
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python=3.11
+  - pip
+  - ffmpeg
+  - pip:
+    - reflex>=0.4.0
+    - moviepy>=2.0.0
+    - pillow>=10.0.0
+    - numpy>=1.24.0
+    - duckduckgo-search>=4.0.0
+    - requests>=2.31.0
