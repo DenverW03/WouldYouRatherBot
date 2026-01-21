@@ -638,6 +638,70 @@ def generate_button() -> rx.Component:
     )
 
 
+def options_container() -> rx.Component:
+    """Create a responsive container for the two option sections.
+    
+    Side-by-side on landscape/desktop screens, stacked on portrait/mobile.
+    """
+    return rx.box(
+        # Option 1 (Red/Upper)
+        rx.box(
+            option_section(
+                title="Option 1",
+                text_label="Display Text",
+                text_placeholder="e.g., Be a chef",
+                text_value=State.upper_text,
+                text_on_change=State.set_upper_text,
+                upload_id="upper_image_upload",
+                image_label="Image",
+                has_image=State.has_upper_image,
+                image_preview=State.upper_image_preview,
+                image_name=State.upper_image_name,
+                on_upload=State.handle_upper_image_upload,
+                on_clear=State.clear_upper_image,
+                is_uploading=State.is_uploading_upper,
+                color=COLORS["red"],
+            ),
+            width=["100%", "100%", "48%", "48%", "48%"],
+            min_width=["auto", "auto", "300px", "300px", "300px"],
+        ),
+        # OR Divider
+        rx.box(
+            or_divider(),
+            display=["block", "block", "none", "none", "none"],
+            width="100%",
+        ),
+        # Option 2 (Blue/Lower)
+        rx.box(
+            option_section(
+                title="Option 2",
+                text_label="Display Text",
+                text_placeholder="e.g., Be a doctor",
+                text_value=State.lower_text,
+                text_on_change=State.set_lower_text,
+                upload_id="lower_image_upload",
+                image_label="Image",
+                has_image=State.has_lower_image,
+                image_preview=State.lower_image_preview,
+                image_name=State.lower_image_name,
+                on_upload=State.handle_lower_image_upload,
+                on_clear=State.clear_lower_image,
+                is_uploading=State.is_uploading_lower,
+                color=COLORS["blue"],
+            ),
+            width=["100%", "100%", "48%", "48%", "48%"],
+            min_width=["auto", "auto", "300px", "300px", "300px"],
+        ),
+        display="flex",
+        flex_direction=["column", "column", "row", "row", "row"],
+        flex_wrap="wrap",
+        justify_content="center",
+        align_items=["stretch", "stretch", "flex-start", "flex-start", "flex-start"],
+        gap="1.5em",
+        width="100%",
+    )
+
+
 def index() -> rx.Component:
     """Main page component."""
     return rx.box(
@@ -659,46 +723,13 @@ def index() -> rx.Component:
                 ),
                 # Status messages
                 status_messages(),
-                # Option 1 (Red/Upper)
-                option_section(
-                    title="Option 1",
-                    text_label="Display Text",
-                    text_placeholder="e.g., Be a chef",
-                    text_value=State.upper_text,
-                    text_on_change=State.set_upper_text,
-                    upload_id="upper_image_upload",
-                    image_label="Image",
-                    has_image=State.has_upper_image,
-                    image_preview=State.upper_image_preview,
-                    image_name=State.upper_image_name,
-                    on_upload=State.handle_upper_image_upload,
-                    on_clear=State.clear_upper_image,
-                    is_uploading=State.is_uploading_upper,
-                    color=COLORS["red"],
-                ),
-                # OR Divider
-                or_divider(),
-                # Option 2 (Blue/Lower)
-                option_section(
-                    title="Option 2",
-                    text_label="Display Text",
-                    text_placeholder="e.g., Be a doctor",
-                    text_value=State.lower_text,
-                    text_on_change=State.set_lower_text,
-                    upload_id="lower_image_upload",
-                    image_label="Image",
-                    has_image=State.has_lower_image,
-                    image_preview=State.lower_image_preview,
-                    image_name=State.lower_image_name,
-                    on_upload=State.handle_lower_image_upload,
-                    on_clear=State.clear_lower_image,
-                    is_uploading=State.is_uploading_lower,
-                    color=COLORS["blue"],
-                ),
+                # Options container (responsive layout)
+                options_container(),
                 # Generate Button
                 rx.box(
                     generate_button(),
                     width="100%",
+                    max_width="500px",
                     margin_top="2em",
                 ),
                 # Download Button
@@ -708,9 +739,10 @@ def index() -> rx.Component:
                     margin_top="1em",
                 ),
                 width="100%",
-                max_width="500px",
+                max_width=["500px", "500px", "900px", "900px", "900px"],
                 padding="2em",
                 spacing="0",
+                align_items="center",
             ),
             width="100%",
             min_height="100vh",
