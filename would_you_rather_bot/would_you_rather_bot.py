@@ -22,6 +22,8 @@ COLORS = {
     "white": "#FFFFFF",
     "dark_gray": "#1a1a1a",
     "light_gray": "#f5f5f5",
+    "background_gray": "#4a4a4a",
+    "off_white": "#e0e0e0",
 }
 
 
@@ -293,7 +295,7 @@ def input_field(
     value: rx.Var,
     on_change: rx.EventHandler,
 ) -> rx.Component:
-    """Create a styled input field."""
+    """Create a styled input field with text area for better readability."""
     return rx.box(
         rx.text(
             label,
@@ -302,17 +304,20 @@ def input_field(
             color=COLORS["white"],
             margin_bottom="0.5em",
         ),
-        rx.input(
+        rx.text_area(
             placeholder=placeholder,
             value=value,
             on_change=on_change,
             width="100%",
-            padding="0.75em",
+            min_height="100px",
+            padding="1em",
             border=f"2px solid {COLORS['white']}",
             border_radius="8px",
             font_size="1em",
+            line_height="1.5",
             background="rgba(255, 255, 255, 0.1)",
             color=COLORS["white"],
+            resize="vertical",
             _placeholder={"color": "rgba(255, 255, 255, 0.6)"},
             _focus={
                 "border_color": COLORS["white"],
@@ -642,14 +647,14 @@ def index() -> rx.Component:
                 rx.heading(
                     "Would You Rather?",
                     size="8",
-                    color=COLORS["black"],
+                    color=COLORS["white"],
                     text_align="center",
                     margin_bottom="0.5em",
                 ),
                 rx.text(
                     "Video Generator",
                     font_size="1.3em",
-                    color="#666666",
+                    color=COLORS["off_white"],
                     margin_bottom="2em",
                 ),
                 # Status messages
@@ -711,7 +716,7 @@ def index() -> rx.Component:
             min_height="100vh",
             padding_y="2em",
         ),
-        background=f"linear-gradient(180deg, {COLORS['red']}22 0%, {COLORS['white']} 30%, {COLORS['white']} 70%, {COLORS['blue']}22 100%)",
+        background=COLORS["background_gray"],
         min_height="100vh",
     )
 
