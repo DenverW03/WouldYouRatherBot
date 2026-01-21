@@ -34,9 +34,9 @@ class ProgressCallback(ProgressBarLogger):
         if self.progress_fn is None:
             return
 
-        if bar == "t" and attr == "index":
+        if bar == "frame_index" and attr == "index":
             # This is the frame rendering progress
-            total = self.bars.get("t", {}).get("total", 0)
+            total = self.bars.get("frame_index", {}).get("total", 0)
             if total > 0:
                 # Scale to 15-95% range (leaving room for setup and encoding)
                 percent = int(15 + (value / total) * 80)
