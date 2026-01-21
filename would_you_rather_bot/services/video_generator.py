@@ -2,17 +2,47 @@
 
 import os
 from pathlib import Path
-from typing import Optional, Union
+from typing import Callable, Optional, Union
 
 import numpy as np
 from moviepy import ImageClip, CompositeVideoClip, TextClip
 from PIL import Image
+from proglog import ProgressBarLogger
 
 
 class VideoGeneratorError(Exception):
     """Exception raised when video generation fails."""
 
     pass
+
+
+class ProgressCallback(ProgressBarLogger):
+    """Custom progress logger that calls a callback function with progress updates."""
+
+    def __init__(self, progress_fn: Optional[Callable[[int, str], None]] = None):
+        """Initialize the progress callback.
+
+        Args:
+            progress_fn: Function to call with (progress_percent, status_message).
+        """
+        super().__init__()
+        self.progress_fn = progress_fn
+        self.last_percent = 0
+
+    def bars_callback(self, bar, attr, value, old_value=None):
+        """Called when progress bar is updated."""
+        if self.progress_fn is None:
+            return
+
+        if bar == "t" and attr == "index":
+            # This is the frame rendering progress
+            total = self.bars.get("t", {}).get("total", 0)
+            if total > 0:
+                # Scale to 15-95% range (leaving room for setup and encoding)
+                percent = int(15 + (value / total) * 80)
+                if percent != self.last_percent:
+                    self.last_percent = percent
+                    self.progress_fn(percent, "Rendering video frames...")
 
 
 class VideoGenerator:
@@ -72,6 +102,7 @@ class VideoGenerator:
         upper_image: Image.Image,
         lower_image: Image.Image,
         output_path: str,
+        progress_callback: Optional[Callable[[int, str], None]] = None,
     ) -> str:
         """Generate a 'Would You Rather?' video.
 
@@ -81,6 +112,8 @@ class VideoGenerator:
             upper_image: PIL Image for the upper option.
             lower_image: PIL Image for the lower option.
             output_path: Path where the video will be saved.
+            progress_callback: Optional callback function that receives
+                (progress_percent, status_message) updates.
 
         Returns:
             The path to the generated video.
@@ -89,13 +122,22 @@ class VideoGenerator:
             VideoGeneratorError: If video generation fails.
         """
         try:
+            if progress_callback:
+                progress_callback(5, "Initializing...")
+
             # Ensure output directory exists
             output_dir = os.path.dirname(output_path)
             if output_dir:
                 os.makedirs(output_dir, exist_ok=True)
 
+            if progress_callback:
+                progress_callback(8, "Creating background...")
+
             # Create background clip
             background_clip = ImageClip(self.background_path, duration=self.DURATION)
+
+            if progress_callback:
+                progress_callback(10, "Processing images...")
 
             # Create image clips with animations
             upper_clip = self._create_animated_image(
@@ -105,9 +147,15 @@ class VideoGenerator:
                 lower_image, self.lower_offset, from_right=True
             )
 
+            if progress_callback:
+                progress_callback(12, "Creating text overlays...")
+
             # Create text clips
             upper_text_clip = self._create_text_clip(upper_text, self.upper_offset_text)
             lower_text_clip = self._create_text_clip(lower_text, self.lower_offset_text)
+
+            if progress_callback:
+                progress_callback(15, "Compositing video layers...")
 
             # Compose all clips
             final_clip = CompositeVideoClip(
@@ -120,17 +168,26 @@ class VideoGenerator:
                 ]
             ).with_fps(self.FPS)
 
+            # Create progress logger if callback provided
+            logger = ProgressCallback(progress_callback) if progress_callback else None
+
             # Write the video file
             final_clip.write_videofile(
                 output_path,
                 fps=self.FPS,
                 codec="libx264",
                 audio=False,
-                logger=None,  # Suppress moviepy progress output
+                logger=logger,
             )
+
+            if progress_callback:
+                progress_callback(98, "Finalizing...")
 
             # Clean up
             final_clip.close()
+
+            if progress_callback:
+                progress_callback(100, "Complete!")
 
             return output_path
 
