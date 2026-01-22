@@ -75,12 +75,13 @@ reflex run
 
 The video settings can be adjusted in `would_you_rather_bot/services/video_generator.py`:
 
-- `DURATION`: Total video length in seconds (default: 6)
-- `ANIMATION_DURATION`: Length of entrance/exit animations (default: 0.3s)
+- `DURATION`: Total video length in seconds (default: 8)
+- `ANIMATION_DURATION`: Length of entrance animations (default: 0.3s)
+- `EXIT_ANIMATION_DURATION`: Length of exit animations (default: 0.7s)
 - `OPTION1_START`: When option 1 appears (default: 1s)
 - `OPTION2_START`: When option 2 appears (default: 2s)
-- `PERCENTAGE_START`: When percentages replace text (default: 4s)
-- `EXIT_START`: When exit animation begins (default: 5s)
+- `PERCENTAGE_START`: When percentages replace text (default: 6s)
+- `EXIT_START`: When exit animation begins (default: 7.3s)
 - `MAX_DIMENSION`: Maximum image dimension in pixels (default: 500)
 - `FPS`: Frames per second (default: 30)
 

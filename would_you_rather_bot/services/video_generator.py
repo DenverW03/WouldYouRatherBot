@@ -49,14 +49,15 @@ class VideoGenerator:
     """Generates 'Would You Rather?' style videos with animated images and text."""
 
     # Video settings
-    DURATION = 6  # Total video duration in seconds
+    DURATION = 8  # Total video duration in seconds
     ANIMATION_DURATION = 0.3  # Duration of entrance/exit animations
+    EXIT_ANIMATION_DURATION = 0.7  # Duration of exit animation (longer for full exit)
     
     # Timing for options (staggered to match TTS narration)
     OPTION1_START = 1  # When option 1 (upper) appears
     OPTION2_START = 2  # When option 2 (lower) appears
-    PERCENTAGE_START = 4  # When percentages replace text
-    EXIT_START = 5  # When exit animation begins
+    PERCENTAGE_START = 6  # When percentages replace text (2s after options settle)
+    EXIT_START = 7.3  # When exit animation begins (completes at DURATION)
     
     MAX_DIMENSION = 500  # Maximum dimension for images
     FPS = 30  # Frames per second
@@ -413,9 +414,8 @@ class VideoGenerator:
         center_x = (self.VIDEO_WIDTH / 2) - (image_width / 2)
         
         # Calculate exit start time relative to clip start
-        # Exit animation completes at DURATION, starts at EXIT_START
-        # So relative to clip: exit_start_relative = clip_duration - (DURATION - EXIT_START)
-        exit_duration = self.DURATION - self.EXIT_START  # Time from exit start to video end
+        # Exit animation uses EXIT_ANIMATION_DURATION to complete
+        exit_duration = self.EXIT_ANIMATION_DURATION
         exit_start_relative = clip_duration - exit_duration
 
         def get_position(t):
