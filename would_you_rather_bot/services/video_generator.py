@@ -49,11 +49,15 @@ class VideoGenerator:
     """Generates 'Would You Rather?' style videos with animated images and text."""
 
     # Video settings
-    DURATION = 10  # Total video duration in seconds
+    DURATION = 6  # Total video duration in seconds
     ANIMATION_DURATION = 0.3  # Duration of entrance/exit animations
-    IMAGE_EXIT_OFFSET = 0.6  # When to start exit animation before video ends
-    TEXT_START = 1  # When text starts to fade in
-    PERCENTAGE_DISPLAY_TIME = 1  # How long to show percentages at end (seconds)
+    
+    # Timing for options (staggered to match TTS narration)
+    OPTION1_START = 1  # When option 1 (upper) appears
+    OPTION2_START = 2  # When option 2 (lower) appears
+    PERCENTAGE_START = 4  # When percentages replace text
+    EXIT_START = 5  # When exit animation begins
+    
     MAX_DIMENSION = 500  # Maximum dimension for images
     FPS = 30  # Frames per second
 
@@ -146,12 +150,13 @@ class VideoGenerator:
             if progress_callback:
                 progress_callback(10, "Processing images...")
 
-            # Create image clips with animations
+            # Create image clips with staggered animations
+            # Option 1 appears at OPTION1_START, Option 2 appears at OPTION2_START
             upper_clip = self._create_animated_image(
-                upper_image, self.upper_offset, from_right=False
+                upper_image, self.upper_offset, from_right=False, start_time=self.OPTION1_START
             )
             lower_clip = self._create_animated_image(
-                lower_image, self.lower_offset, from_right=True
+                lower_image, self.lower_offset, from_right=True, start_time=self.OPTION2_START
             )
 
             if progress_callback:
@@ -159,28 +164,29 @@ class VideoGenerator:
 
             # Calculate when to switch to percentage display
             show_percentages = upper_percentage is not None and lower_percentage is not None
-            percentage_start_time = self.DURATION - self.PERCENTAGE_DISPLAY_TIME
 
-            # Create text clips - they end early if percentages are shown
-            text_duration = (
-                percentage_start_time - self.TEXT_START
-                if show_percentages
-                else self.DURATION - self.TEXT_START
-            )
+            # Create text clips with staggered start times
+            # Upper text: starts at OPTION1_START, ends at PERCENTAGE_START (if showing percentages) or DURATION
+            upper_text_end = self.PERCENTAGE_START if show_percentages else self.DURATION
+            upper_text_duration = upper_text_end - self.OPTION1_START
             upper_text_clip = self._create_text_clip(
-                upper_text, self.upper_offset_text, duration=text_duration
+                upper_text, self.upper_offset_text, duration=upper_text_duration
             )
+
+            # Lower text: starts at OPTION2_START, ends at PERCENTAGE_START (if showing percentages) or DURATION
+            lower_text_end = self.PERCENTAGE_START if show_percentages else self.DURATION
+            lower_text_duration = lower_text_end - self.OPTION2_START
             lower_text_clip = self._create_text_clip(
-                lower_text, self.lower_offset_text, duration=text_duration
+                lower_text, self.lower_offset_text, duration=lower_text_duration
             )
 
             # Build list of clips
             clips = [
                 background_clip,
-                upper_clip,
-                lower_clip,
-                upper_text_clip.with_start(self.TEXT_START),
-                lower_text_clip.with_start(self.TEXT_START),
+                upper_clip.with_start(self.OPTION1_START),
+                lower_clip.with_start(self.OPTION2_START),
+                upper_text_clip.with_start(self.OPTION1_START),
+                lower_text_clip.with_start(self.OPTION2_START),
             ]
 
             # Add percentage text clips if enabled
@@ -188,15 +194,16 @@ class VideoGenerator:
                 if progress_callback:
                     progress_callback(13, "Adding percentage overlays...")
 
+                percentage_duration = self.DURATION - self.PERCENTAGE_START
                 upper_pct_clip = self._create_percentage_clip(
-                    upper_percentage, self.upper_offset_text
+                    upper_percentage, self.upper_offset_text, duration=percentage_duration
                 )
                 lower_pct_clip = self._create_percentage_clip(
-                    lower_percentage, self.lower_offset_text
+                    lower_percentage, self.lower_offset_text, duration=percentage_duration
                 )
                 clips.extend([
-                    upper_pct_clip.with_start(percentage_start_time),
-                    lower_pct_clip.with_start(percentage_start_time),
+                    upper_pct_clip.with_start(self.PERCENTAGE_START),
+                    lower_pct_clip.with_start(self.PERCENTAGE_START),
                 ])
 
             if progress_callback:
@@ -262,7 +269,7 @@ class VideoGenerator:
             A styled TextClip.
         """
         if duration is None:
-            duration = self.DURATION - self.TEXT_START
+            duration = self.DURATION - self.OPTION1_START
 
         text_clip = TextClip(
             text=text,
@@ -277,16 +284,22 @@ class VideoGenerator:
         text_clip = text_clip.with_position(("center", y_offset)).with_duration(duration)
         return text_clip
 
-    def _create_percentage_clip(self, percentage: float, y_offset: float) -> TextClip:
+    def _create_percentage_clip(
+        self, percentage: float, y_offset: float, duration: Optional[float] = None
+    ) -> TextClip:
         """Create a percentage display text clip.
 
         Args:
             percentage: The percentage value to display.
             y_offset: Vertical position on screen.
+            duration: Optional duration override.
 
         Returns:
             A styled TextClip showing the percentage.
         """
+        if duration is None:
+            duration = self.DURATION - self.PERCENTAGE_START
+
         # Format percentage - show as integer if whole number, else one decimal
         if percentage == int(percentage):
             pct_text = f"{int(percentage)}%"
@@ -303,13 +316,11 @@ class VideoGenerator:
             stroke_color="black",
             stroke_width=5,
         )
-        text_clip = text_clip.with_position(("center", y_offset)).with_duration(
-            self.PERCENTAGE_DISPLAY_TIME
-        )
+        text_clip = text_clip.with_position(("center", y_offset)).with_duration(duration)
         return text_clip
 
     def _create_animated_image(
-        self, image: Image.Image, y_offset: float, from_right: bool
+        self, image: Image.Image, y_offset: float, from_right: bool, start_time: float = 0
     ) -> ImageClip:
         """Create an animated image clip with entrance and exit animations.
 
@@ -317,12 +328,16 @@ class VideoGenerator:
             image: PIL Image to animate.
             y_offset: Vertical position on screen.
             from_right: If True, enters from right; if False, enters from left.
+            start_time: When this clip starts in the video timeline.
 
         Returns:
             An animated ImageClip.
         """
+        # Calculate clip duration (from start_time to end of video)
+        clip_duration = self.DURATION - start_time
+
         # Create clip from image
-        clip = ImageClip(np.array(image), duration=self.DURATION)
+        clip = ImageClip(np.array(image), duration=clip_duration)
 
         # Calculate resize multiplier
         resize_mult = self._calc_resize_mult(clip)
@@ -331,10 +346,10 @@ class VideoGenerator:
         # Apply rotation animation
         clip = clip.transform(self._create_rotation_transform())
 
-        # Apply position animation
+        # Apply position animation (using clip-relative time, not video time)
         clip = clip.with_position(
-            self._create_position_function(clip.w, y_offset, from_right)
-        ).with_duration(self.DURATION)
+            self._create_position_function(clip.w, y_offset, from_right, clip_duration)
+        ).with_duration(clip_duration)
 
         return clip
 
@@ -382,7 +397,7 @@ class VideoGenerator:
         return rotate_and_translate
 
     def _create_position_function(
-        self, image_width: float, y_offset: float, from_right: bool
+        self, image_width: float, y_offset: float, from_right: bool, clip_duration: float
     ):
         """Create a position function for entrance/exit animations.
 
@@ -390,18 +405,23 @@ class VideoGenerator:
             image_width: Width of the image.
             y_offset: Vertical position.
             from_right: Animation direction.
+            clip_duration: Duration of this clip.
 
         Returns:
             A position function for moviepy.
         """
         center_x = (self.VIDEO_WIDTH / 2) - (image_width / 2)
+        
+        # Calculate exit start time relative to clip start
+        # Exit animation completes at DURATION, starts at EXIT_START
+        # So relative to clip: exit_start_relative = clip_duration - (DURATION - EXIT_START)
+        exit_duration = self.DURATION - self.EXIT_START  # Time from exit start to video end
+        exit_start_relative = clip_duration - exit_duration
 
         def get_position(t):
-            # Exit animation
-            if t >= self.DURATION - self.IMAGE_EXIT_OFFSET:
-                exit_progress = min(
-                    1, (t - (self.DURATION - self.IMAGE_EXIT_OFFSET)) / self.ANIMATION_DURATION
-                )
+            # Exit animation (starts at exit_start_relative within clip's timeline)
+            if t >= exit_start_relative:
+                exit_progress = min(1, (t - exit_start_relative) / exit_duration)
                 if from_right:
                     # Exit to right
                     offscreen_x = self.VIDEO_WIDTH
@@ -412,7 +432,7 @@ class VideoGenerator:
                     current_x = center_x + (offscreen_x - center_x) * exit_progress
                 return current_x, y_offset
 
-            # Entrance animation
+            # Entrance animation (at the start of clip)
             entrance_progress = min(1, t / self.ANIMATION_DURATION)
             if from_right:
                 # Enter from right
