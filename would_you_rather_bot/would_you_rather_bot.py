@@ -2,6 +2,7 @@
 
 import base64
 import os
+import random
 import tempfile
 import uuid
 from datetime import datetime
@@ -12,6 +13,7 @@ import reflex as rx
 
 from .services.video_generator import VideoGenerator, VideoGeneratorError
 from .services.image_retrieval import ImageProcessor, ImageProcessingError
+from .services.tts_generator import TTSGenerator, TTSGeneratorError
 
 
 # Color constants matching the video style
@@ -39,6 +41,15 @@ class State(rx.State):
     lower_image_data: Optional[str] = None
     upper_image_name: str = ""
     lower_image_name: str = ""
+
+    # Percentage settings
+    show_percentages: bool = False
+    auto_percentages: bool = True
+    upper_percentage: str = ""
+    lower_percentage: str = ""
+
+    # TTS settings
+    enable_tts: bool = False
 
     # Status tracking
     is_generating: bool = False
@@ -73,6 +84,36 @@ class State(rx.State):
     def set_lower_text(self, value: str):
         """Set the lower text value."""
         self.lower_text = value
+        self.clear_messages()
+
+    @rx.event
+    def toggle_show_percentages(self, value: bool):
+        """Toggle the show percentages setting."""
+        self.show_percentages = value
+        self.clear_messages()
+
+    @rx.event
+    def toggle_auto_percentages(self, value: bool):
+        """Toggle the auto-generate percentages setting."""
+        self.auto_percentages = value
+        self.clear_messages()
+
+    @rx.event
+    def set_upper_percentage(self, value: str):
+        """Set the upper percentage value."""
+        self.upper_percentage = value
+        self.clear_messages()
+
+    @rx.event
+    def set_lower_percentage(self, value: str):
+        """Set the lower percentage value."""
+        self.lower_percentage = value
+        self.clear_messages()
+
+    @rx.event
+    def toggle_tts(self, value: bool):
+        """Toggle text-to-speech setting."""
+        self.enable_tts = value
         self.clear_messages()
 
     @rx.event
@@ -163,7 +204,52 @@ class State(rx.State):
         if not self.lower_image_data:
             self.error_message = "Please upload an image for Option 2."
             return False
+
+        # Validate percentages if enabled and not auto-generated
+        if self.show_percentages and not self.auto_percentages:
+            upper_pct, lower_pct = self._parse_percentages()
+            if upper_pct is None or lower_pct is None:
+                self.error_message = "Please enter valid percentage values (numbers between 0 and 100)."
+                return False
+            if abs((upper_pct + lower_pct) - 100) > 0.01:
+                self.error_message = f"Percentages must add up to 100%. Currently: {upper_pct}% + {lower_pct}% = {upper_pct + lower_pct}%"
+                return False
+
         return True
+
+    def _parse_percentages(self) -> tuple:
+        """Parse percentage values from string inputs.
+        
+        Returns:
+            Tuple of (upper_percentage, lower_percentage) as floats, or (None, None) if invalid.
+        """
+        try:
+            upper_pct = float(self.upper_percentage.strip()) if self.upper_percentage.strip() else None
+            lower_pct = float(self.lower_percentage.strip()) if self.lower_percentage.strip() else None
+            
+            if upper_pct is None or lower_pct is None:
+                return (None, None)
+            
+            if upper_pct < 0 or upper_pct > 100 or lower_pct < 0 or lower_pct > 100:
+                return (None, None)
+                
+            return (upper_pct, lower_pct)
+        except ValueError:
+            return (None, None)
+
+    def _get_percentages(self) -> tuple:
+        """Get percentage values, either auto-generated or user-provided.
+        
+        Returns:
+            Tuple of (upper_percentage, lower_percentage) as floats.
+        """
+        if self.auto_percentages:
+            # Generate random percentages that sum to 100
+            upper_pct = random.randint(10, 90)
+            lower_pct = 100 - upper_pct
+            return (float(upper_pct), float(lower_pct))
+        else:
+            return self._parse_percentages()
 
     @rx.event(background=True)
     async def generate_video(self):
@@ -198,10 +284,39 @@ class State(rx.State):
                 lower_image_data = self.lower_image_data
                 upper_text = self.upper_text.strip()
                 lower_text = self.lower_text.strip()
+                show_percentages = self.show_percentages
+                enable_tts = self.enable_tts
+
+                # Get percentages if enabled
+                if show_percentages:
+                    upper_percentage, lower_percentage = self._get_percentages()
+                else:
+                    upper_percentage, lower_percentage = None, None
 
             # Process the uploaded images (quick operation)
             upper_image = ImageProcessor.process_uploaded_image(upper_image_data)
             lower_image = ImageProcessor.process_uploaded_image(lower_image_data)
+
+            # Generate TTS audio if enabled
+            tts_audio_path = None
+            if enable_tts:
+                async with self:
+                    self.generation_progress = 3
+                    self.generation_status = "Generating voice narration..."
+                
+                try:
+                    tts_generator = TTSGenerator()
+                    tts_text = f"Would you rather {upper_text} or {lower_text}?"
+                    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tts_file:
+                        tts_audio_path = tts_file.name
+                    tts_generator.generate(tts_text, tts_audio_path)
+                except TTSGeneratorError as e:
+                    async with self:
+                        self.error_message = f"Voice generation failed: {str(e)}"
+                        self.is_generating = False
+                        self.generation_progress = 0
+                        self.generation_status = ""
+                    return
 
             # Create a temporary file for the video
             with tempfile.NamedTemporaryFile(suffix=".mp4", delete=False) as tmp_file:
@@ -223,6 +338,9 @@ class State(rx.State):
                         lower_image=lower_image,
                         output_path=output_path,
                         progress_callback=progress_callback,
+                        upper_percentage=upper_percentage,
+                        lower_percentage=lower_percentage,
+                        audio_path=tts_audio_path,
                     )
 
                     # Read the video file and encode as base64
@@ -254,9 +372,11 @@ class State(rx.State):
 
                 await asyncio.sleep(0.1)  # Poll every 100ms
 
-            # Clean up temporary file
+            # Clean up temporary files
             if os.path.exists(output_path):
                 os.unlink(output_path)
+            if tts_audio_path and os.path.exists(tts_audio_path):
+                os.unlink(tts_audio_path)
 
             # Handle result
             if generation_result["success"]:
@@ -574,7 +694,8 @@ def or_divider() -> rx.Component:
                 font_size="1.5em",
             ),
             background=COLORS["black"],
-            padding="1em 1.5em",
+            width="4em",
+            height="4em",
             border_radius="50%",
             display="flex",
             align_items="center",
@@ -757,7 +878,8 @@ def or_divider_horizontal() -> rx.Component:
                 font_size="1.5em",
             ),
             background=COLORS["black"],
-            padding="1em 1.5em",
+            width="4em",
+            height="4em",
             border_radius="50%",
             display="flex",
             align_items="center",
@@ -766,6 +888,163 @@ def or_divider_horizontal() -> rx.Component:
         height="100%",
         display="flex",
         align_items="center",
+    )
+
+
+def percentage_settings() -> rx.Component:
+    """Create the percentage settings section."""
+    return rx.box(
+        # Show Percentages Toggle
+        rx.hstack(
+            rx.switch(
+                checked=State.show_percentages,
+                on_change=State.toggle_show_percentages,
+            ),
+            rx.text(
+                "Show result percentages",
+                color=COLORS["white"],
+                font_size="1em",
+            ),
+            spacing="3",
+            align_items="center",
+        ),
+        # Auto-generate toggle (only visible when show_percentages is enabled)
+        rx.cond(
+            State.show_percentages,
+            rx.box(
+                rx.hstack(
+                    rx.switch(
+                        checked=State.auto_percentages,
+                        on_change=State.toggle_auto_percentages,
+                    ),
+                    rx.text(
+                        "Auto-generate percentages",
+                        color=COLORS["white"],
+                        font_size="0.95em",
+                    ),
+                    spacing="3",
+                    align_items="center",
+                ),
+                margin_top="0.75em",
+                margin_left="1em",
+            ),
+        ),
+        # Manual percentage inputs (only visible when show_percentages is enabled and auto is disabled)
+        rx.cond(
+            State.show_percentages & ~State.auto_percentages,
+            rx.box(
+                rx.hstack(
+                    rx.box(
+                        rx.text(
+                            "Option 1 %",
+                            color=COLORS["white"],
+                            font_size="0.9em",
+                            margin_bottom="0.25em",
+                        ),
+                        rx.input(
+                            placeholder="e.g., 65",
+                            value=State.upper_percentage,
+                            on_change=State.set_upper_percentage,
+                            width="100%",
+                            padding="0.5em",
+                            border=f"2px solid {COLORS['red']}",
+                            border_radius="6px",
+                            background="rgba(255, 255, 255, 0.1)",
+                            color=COLORS["white"],
+                            _placeholder={"color": "rgba(255, 255, 255, 0.5)"},
+                        ),
+                        flex="1",
+                    ),
+                    rx.box(
+                        rx.text(
+                            "Option 2 %",
+                            color=COLORS["white"],
+                            font_size="0.9em",
+                            margin_bottom="0.25em",
+                        ),
+                        rx.input(
+                            placeholder="e.g., 35",
+                            value=State.lower_percentage,
+                            on_change=State.set_lower_percentage,
+                            width="100%",
+                            padding="0.5em",
+                            border=f"2px solid {COLORS['blue']}",
+                            border_radius="6px",
+                            background="rgba(255, 255, 255, 0.1)",
+                            color=COLORS["white"],
+                            _placeholder={"color": "rgba(255, 255, 255, 0.5)"},
+                        ),
+                        flex="1",
+                    ),
+                    spacing="4",
+                    width="100%",
+                ),
+                rx.text(
+                    "Percentages must add up to 100%",
+                    color="rgba(255, 255, 255, 0.6)",
+                    font_size="0.8em",
+                    margin_top="0.5em",
+                ),
+                margin_top="0.75em",
+                margin_left="1em",
+            ),
+        ),
+        width="100%",
+    )
+
+
+def tts_settings() -> rx.Component:
+    """Create the TTS settings section."""
+    return rx.box(
+        rx.hstack(
+            rx.switch(
+                checked=State.enable_tts,
+                on_change=State.toggle_tts,
+            ),
+            rx.text(
+                "Enable voice narration",
+                color=COLORS["white"],
+                font_size="1em",
+            ),
+            spacing="3",
+            align_items="center",
+        ),
+        rx.cond(
+            State.enable_tts,
+            rx.text(
+                'Reads: "Would you rather [Option 1] or [Option 2]?"',
+                color="rgba(255, 255, 255, 0.6)",
+                font_size="0.85em",
+                margin_top="0.5em",
+                margin_left="3em",
+            ),
+        ),
+        width="100%",
+    )
+
+
+def video_settings() -> rx.Component:
+    """Create the video settings section with percentage and TTS options."""
+    return rx.box(
+        rx.text(
+            "Video Settings",
+            font_weight="bold",
+            font_size="1.1em",
+            color=COLORS["white"],
+            margin_bottom="1em",
+        ),
+        rx.vstack(
+            percentage_settings(),
+            tts_settings(),
+            spacing="4",
+            width="100%",
+            align_items="start",
+        ),
+        background="rgba(0, 0, 0, 0.3)",
+        padding="1.5em",
+        border_radius="12px",
+        width="100%",
+        margin_top="1.5em",
     )
 
 
@@ -861,6 +1140,12 @@ def index() -> rx.Component:
                 status_messages(),
                 # Options container (responsive layout)
                 options_container(),
+                # Video settings (percentage and TTS options)
+                rx.box(
+                    video_settings(),
+                    width="100%",
+                    max_width=["500px", "500px", "900px", "900px", "900px"],
+                ),
                 # Generate Button
                 rx.box(
                     generate_button(),

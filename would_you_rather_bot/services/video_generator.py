@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Callable, Optional, Union
 
 import numpy as np
-from moviepy import ImageClip, CompositeVideoClip, TextClip
+from moviepy import ImageClip, CompositeVideoClip, TextClip, AudioFileClip
 from PIL import Image
 from proglog import ProgressBarLogger
 
@@ -53,6 +53,7 @@ class VideoGenerator:
     ANIMATION_DURATION = 0.3  # Duration of entrance/exit animations
     IMAGE_EXIT_OFFSET = 0.6  # When to start exit animation before video ends
     TEXT_START = 1  # When text starts to fade in
+    PERCENTAGE_DISPLAY_TIME = 1  # How long to show percentages at end (seconds)
     MAX_DIMENSION = 500  # Maximum dimension for images
     FPS = 30  # Frames per second
 
@@ -103,6 +104,9 @@ class VideoGenerator:
         lower_image: Image.Image,
         output_path: str,
         progress_callback: Optional[Callable[[int, str], None]] = None,
+        upper_percentage: Optional[float] = None,
+        lower_percentage: Optional[float] = None,
+        audio_path: Optional[str] = None,
     ) -> str:
         """Generate a 'Would You Rather?' video.
 
@@ -114,6 +118,9 @@ class VideoGenerator:
             output_path: Path where the video will be saved.
             progress_callback: Optional callback function that receives
                 (progress_percent, status_message) updates.
+            upper_percentage: Optional percentage for upper option (shown at end).
+            lower_percentage: Optional percentage for lower option (shown at end).
+            audio_path: Optional path to audio file for narration.
 
         Returns:
             The path to the generated video.
@@ -150,23 +157,68 @@ class VideoGenerator:
             if progress_callback:
                 progress_callback(12, "Creating text overlays...")
 
-            # Create text clips
-            upper_text_clip = self._create_text_clip(upper_text, self.upper_offset_text)
-            lower_text_clip = self._create_text_clip(lower_text, self.lower_offset_text)
+            # Calculate when to switch to percentage display
+            show_percentages = upper_percentage is not None and lower_percentage is not None
+            percentage_start_time = self.DURATION - self.PERCENTAGE_DISPLAY_TIME
+
+            # Create text clips - they end early if percentages are shown
+            text_duration = (
+                percentage_start_time - self.TEXT_START
+                if show_percentages
+                else self.DURATION - self.TEXT_START
+            )
+            upper_text_clip = self._create_text_clip(
+                upper_text, self.upper_offset_text, duration=text_duration
+            )
+            lower_text_clip = self._create_text_clip(
+                lower_text, self.lower_offset_text, duration=text_duration
+            )
+
+            # Build list of clips
+            clips = [
+                background_clip,
+                upper_clip,
+                lower_clip,
+                upper_text_clip.with_start(self.TEXT_START),
+                lower_text_clip.with_start(self.TEXT_START),
+            ]
+
+            # Add percentage text clips if enabled
+            if show_percentages:
+                if progress_callback:
+                    progress_callback(13, "Adding percentage overlays...")
+
+                upper_pct_clip = self._create_percentage_clip(
+                    upper_percentage, self.upper_offset_text
+                )
+                lower_pct_clip = self._create_percentage_clip(
+                    lower_percentage, self.lower_offset_text
+                )
+                clips.extend([
+                    upper_pct_clip.with_start(percentage_start_time),
+                    lower_pct_clip.with_start(percentage_start_time),
+                ])
 
             if progress_callback:
                 progress_callback(15, "Compositing video layers...")
 
             # Compose all clips
-            final_clip = CompositeVideoClip(
-                [
-                    background_clip,
-                    upper_clip,
-                    lower_clip,
-                    upper_text_clip.with_start(self.TEXT_START),
-                    lower_text_clip.with_start(self.TEXT_START),
-                ]
-            ).with_fps(self.FPS)
+            final_clip = CompositeVideoClip(clips).with_fps(self.FPS)
+
+            # Add audio if provided
+            if audio_path and os.path.exists(audio_path):
+                if progress_callback:
+                    progress_callback(16, "Adding audio...")
+                try:
+                    audio_clip = AudioFileClip(audio_path)
+                    # Ensure audio doesn't exceed video duration
+                    if audio_clip.duration > self.DURATION:
+                        audio_clip = audio_clip.subclipped(0, self.DURATION)
+                    final_clip = final_clip.with_audio(audio_clip)
+                except Exception as e:
+                    # Log but don't fail if audio can't be added
+                    if progress_callback:
+                        progress_callback(16, "Warning: Could not add audio")
 
             # Create progress logger if callback provided
             logger = ProgressCallback(progress_callback) if progress_callback else None
@@ -176,7 +228,7 @@ class VideoGenerator:
                 output_path,
                 fps=self.FPS,
                 codec="libx264",
-                audio=False,
+                audio_codec="aac" if audio_path else None,
                 logger=logger,
             )
 
@@ -196,16 +248,22 @@ class VideoGenerator:
         except Exception as e:
             raise VideoGeneratorError(f"Video generation failed: {str(e)}")
 
-    def _create_text_clip(self, text: str, y_offset: float) -> TextClip:
+    def _create_text_clip(
+        self, text: str, y_offset: float, duration: Optional[float] = None
+    ) -> TextClip:
         """Create a text clip with styling.
 
         Args:
             text: The text content.
             y_offset: Vertical position on screen.
+            duration: Optional duration override.
 
         Returns:
             A styled TextClip.
         """
+        if duration is None:
+            duration = self.DURATION - self.TEXT_START
+
         text_clip = TextClip(
             text=text,
             size=(self.VIDEO_WIDTH, self.VIDEO_HEIGHT),
@@ -216,8 +274,37 @@ class VideoGenerator:
             stroke_color="black",
             stroke_width=4,
         )
+        text_clip = text_clip.with_position(("center", y_offset)).with_duration(duration)
+        return text_clip
+
+    def _create_percentage_clip(self, percentage: float, y_offset: float) -> TextClip:
+        """Create a percentage display text clip.
+
+        Args:
+            percentage: The percentage value to display.
+            y_offset: Vertical position on screen.
+
+        Returns:
+            A styled TextClip showing the percentage.
+        """
+        # Format percentage - show as integer if whole number, else one decimal
+        if percentage == int(percentage):
+            pct_text = f"{int(percentage)}%"
+        else:
+            pct_text = f"{percentage:.1f}%"
+
+        text_clip = TextClip(
+            text=pct_text,
+            size=(self.VIDEO_WIDTH, self.VIDEO_HEIGHT),
+            vertical_align="top",
+            font_size=120,
+            color="white",
+            font=self.font_path,
+            stroke_color="black",
+            stroke_width=5,
+        )
         text_clip = text_clip.with_position(("center", y_offset)).with_duration(
-            self.DURATION - self.TEXT_START
+            self.PERCENTAGE_DISPLAY_TIME
         )
         return text_clip
 

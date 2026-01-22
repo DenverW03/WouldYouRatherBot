@@ -10,6 +10,8 @@ A web application that generates "Would You Rather?" style short-form videos wit
 - Animated image entrance/exit effects
 - Red/blue themed UI matching the video style
 - Local video output with download
+- **Result percentages** - Show voting percentages at the end of the video (auto-generated or custom)
+- **Voice narration** - Text-to-speech reads the options aloud using Coqui TTS
 
 ## Installation
 
@@ -53,8 +55,13 @@ reflex run
    - **Option 1 Image**: Upload an image for the first option
    - **Option 2 Text**: The second option text
    - **Option 2 Image**: Upload an image for the second option
-4. Click "Generate Video"
-5. Wait for processing, then click "Download Video" to save directly to your browser's downloads
+4. Configure video settings (optional):
+   - **Show result percentages**: Toggle to display voting percentages at the end
+     - **Auto-generate**: Randomly assigns percentages that sum to 100%
+     - **Manual**: Enter custom percentages (must sum to 100%)
+   - **Enable voice narration**: Adds TTS audio reading "Would you rather [option1] or [option2]?"
+5. Click "Generate Video"
+6. Wait for processing, then click "Download Video" to save directly to your browser's downloads
 
 ## Supported Image Formats
 
@@ -70,6 +77,7 @@ The video settings can be adjusted in `would_you_rather_bot/services/video_gener
 
 - `DURATION`: Total video length in seconds (default: 10)
 - `ANIMATION_DURATION`: Length of entrance/exit animations (default: 0.3s)
+- `PERCENTAGE_DISPLAY_TIME`: How long percentages are shown at end (default: 1s)
 - `MAX_DIMENSION`: Maximum image dimension in pixels (default: 500)
 - `FPS`: Frames per second (default: 30)
 
