@@ -13,7 +13,13 @@ import reflex as rx
 
 from .services.video_generator import VideoGenerator, VideoGeneratorError
 from .services.image_retrieval import ImageProcessor, ImageProcessingError
-from .services.tts_generator import TTSGenerator, TTSGeneratorError
+from .services.tts_generator import (
+    TTSGenerator,
+    TTSGeneratorError,
+    get_voice_options,
+    get_default_voice,
+    AVAILABLE_VOICES,
+)
 from .components import floating_support_button
 
 
@@ -51,6 +57,7 @@ class State(rx.State):
 
     # TTS settings
     enable_tts: bool = False
+    selected_voice: str = "ljspeech_tacotron"
 
     # Status tracking
     is_generating: bool = False
@@ -116,6 +123,23 @@ class State(rx.State):
         """Toggle text-to-speech setting."""
         self.enable_tts = value
         self.clear_messages()
+
+    @rx.event
+    def set_voice_by_description(self, description: str):
+        """Set the selected TTS voice by its description."""
+        # Find the voice_id that matches this description
+        for voice_id, info in AVAILABLE_VOICES.items():
+            if info["description"] == description:
+                self.selected_voice = voice_id
+                break
+        self.clear_messages()
+
+    @rx.var
+    def selected_voice_description(self) -> str:
+        """Get the description of the currently selected voice."""
+        if self.selected_voice in AVAILABLE_VOICES:
+            return AVAILABLE_VOICES[self.selected_voice]["description"]
+        return AVAILABLE_VOICES[get_default_voice()]["description"]
 
     @rx.event
     async def handle_upper_image_upload(self, files: list[rx.UploadFile]):
@@ -287,6 +311,7 @@ class State(rx.State):
                 lower_text = self.lower_text.strip()
                 show_percentages = self.show_percentages
                 enable_tts = self.enable_tts
+                selected_voice = self.selected_voice
 
                 # Get percentages if enabled
                 if show_percentages:
@@ -306,7 +331,7 @@ class State(rx.State):
                     self.generation_status = "Generating voice narration..."
                 
                 try:
-                    tts_generator = TTSGenerator()
+                    tts_generator = TTSGenerator(voice_id=selected_voice)
                     tts_text = f"Would you rather {upper_text} or {lower_text}?"
                     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tts_file:
                         tts_audio_path = tts_file.name
@@ -1012,10 +1037,30 @@ def tts_settings() -> rx.Component:
         ),
         rx.cond(
             State.enable_tts,
-            rx.text(
-                'Reads: "Would you rather [Option 1] or [Option 2]?"',
-                color="rgba(255, 255, 255, 0.6)",
-                font_size="0.85em",
+            rx.box(
+                rx.text(
+                    'Reads: "Would you rather [Option 1] or [Option 2]?"',
+                    color="rgba(255, 255, 255, 0.6)",
+                    font_size="0.85em",
+                    margin_bottom="0.75em",
+                ),
+                rx.box(
+                    rx.text(
+                        "Voice",
+                        color=COLORS["white"],
+                        font_size="0.9em",
+                        margin_bottom="0.25em",
+                    ),
+                    rx.select(
+                        [info["description"] for info in AVAILABLE_VOICES.values()],
+                        value=State.selected_voice_description,
+                        on_change=State.set_voice_by_description,
+                        placeholder="Select a voice",
+                        width="100%",
+                    ),
+                    width="100%",
+                    max_width="300px",
+                ),
                 margin_top="0.5em",
                 margin_left="3em",
             ),
