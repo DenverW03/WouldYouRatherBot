@@ -416,7 +416,14 @@ class VideoGenerator:
         # Calculate exit start time relative to clip start
         # Exit animation uses EXIT_ANIMATION_DURATION to complete
         exit_duration = self.EXIT_ANIMATION_DURATION
-        exit_start_relative = clip_duration - exit_duration
+        
+        # Account for frame timing: the last frame time is (total_frames - 1) / FPS
+        # which is less than clip_duration. We need the exit animation to complete
+        # by the last frame, so we calculate the actual last frame time and use that
+        # as our target completion time.
+        total_frames = int(clip_duration * self.FPS)
+        last_frame_time = (total_frames - 1) / self.FPS
+        exit_start_relative = last_frame_time - exit_duration
 
         def get_position(t):
             # Exit animation (starts at exit_start_relative within clip's timeline)
