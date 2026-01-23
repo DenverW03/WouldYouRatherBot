@@ -14,6 +14,7 @@ import reflex as rx
 from .services.video_generator import VideoGenerator, VideoGeneratorError
 from .services.image_retrieval import ImageProcessor, ImageProcessingError
 from .services.tts_generator import TTSGenerator, TTSGeneratorError
+from .components import floating_support_button
 
 
 # Color constants matching the video style
@@ -1170,6 +1171,12 @@ def index() -> rx.Component:
             width="100%",
             min_height="100vh",
             padding_y="2em",
+        ),
+        # Floating support button
+        floating_support_button(
+            icon_name="coffee",
+            text="Buy me a coffee",
+            href="#",  # Placeholder URL - update when actual link is available
         ),
         background=COLORS["background_gray"],
         min_height="100vh",
