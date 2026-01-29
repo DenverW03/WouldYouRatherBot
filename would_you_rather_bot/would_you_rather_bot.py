@@ -1221,7 +1221,7 @@ def index() -> rx.Component:
         floating_support_button(
             icon_name="coffee",
             text="Buy me a coffee",
-            href="#",  # Placeholder URL - update when actual link is available
+            href="https://buymeacoffee.com/denverw",  # Placeholder URL - update when actual link is available
         ),
         background=COLORS["background_gray"],
         min_height="100vh",

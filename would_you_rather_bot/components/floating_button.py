@@ -6,7 +6,7 @@ import reflex as rx
 def floating_support_button(
     icon_name: str = "coffee",
     text: str = "Buy me a coffee",
-    href: str = "#",
+    href: str = "https://buymeacoffee.com/denverw",
 ) -> rx.Component:
     """Create a floating support button in the bottom right corner.
     
