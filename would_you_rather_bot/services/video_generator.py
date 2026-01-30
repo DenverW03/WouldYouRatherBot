@@ -387,13 +387,28 @@ class VideoGenerator:
 
             # Convert to RGBA for proper rotation with transparency
             im2 = image_pil.convert("RGBA")
-            rotated_image = im2.rotate(current_angle, expand=True)
 
-            # Composite with transparent background
-            background = Image.new("RGBA", rotated_image.size, (255, 255, 255, 0))
-            result = Image.composite(rotated_image, background, rotated_image)
+            # Get original dimensions
+            original_width, original_height = im2.size
 
-            return np.array(result)
+            # Calculate the size needed to fit the rotated image at any angle
+            # For a square that can contain the rotated rectangle, we use the diagonal
+            import math
+            diagonal = int(math.sqrt(original_width**2 + original_height**2))
+
+            # Create a larger canvas to fit the rotation at any angle
+            canvas_size = (diagonal, diagonal)
+            canvas = Image.new("RGBA", canvas_size, (0, 0, 0, 0))
+
+            # Paste the original image centered on the canvas
+            paste_x = (diagonal - original_width) // 2
+            paste_y = (diagonal - original_height) // 2
+            canvas.paste(im2, (paste_x, paste_y), im2)
+
+            # Rotate around the center without expanding (canvas is already large enough)
+            rotated_image = canvas.rotate(current_angle, resample=Image.Resampling.BICUBIC, expand=False)
+
+            return np.array(rotated_image)
 
         return rotate_and_translate
 
@@ -412,11 +427,11 @@ class VideoGenerator:
             A position function for moviepy.
         """
         center_x = (self.VIDEO_WIDTH / 2) - (image_width / 2)
-        
+
         # Calculate exit start time relative to clip start
         # Exit animation uses EXIT_ANIMATION_DURATION to complete
         exit_duration = self.EXIT_ANIMATION_DURATION
-        
+
         # Account for frame timing: the last frame time is (total_frames - 1) / FPS
         # which is less than clip_duration. We need the exit animation to complete
         # by the last frame, so we calculate the actual last frame time and use that
